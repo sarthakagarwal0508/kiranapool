@@ -6,6 +6,7 @@ import os
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from economics.costs import (
     calculate_per_shop_savings,
@@ -75,17 +76,12 @@ async def optimize_route(request: Request):
             detail="Invalid or empty JSON request body. Send a JSON object containing 'orders'.",
         ) from exc
 
-    if not isinstance(body, dict):
-        raise HTTPException(
-            status_code=400,
-            detail="Request body must be a JSON object containing 'orders'.",
+    if not isinstance(body, dict) or "orders" not in body:
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Malformed request: missing 'orders' field"},
         )
 
-    if "orders" not in body:
-        raise HTTPException(
-            status_code=422,
-            detail="Missing required field 'orders'.",
-        )
 
     orders = body["orders"]
 

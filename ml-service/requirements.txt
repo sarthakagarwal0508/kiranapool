@@ -1,8 +1,6 @@
 # KiranaPool ML Service Dependencies
 # Note: Offline 24-hour hackathon environment - verify package availability before adding.
 
-# Test framework (verified available in local offline environment)
-
 fastapi>=0.110.0
 uvicorn[standard]>=0.28.0
 pydantic>=2.0.0
@@ -12,8 +10,3 @@ scipy>=1.12.0
 scikit-learn>=1.4.0
 pytest>=8.0.0
 
-# Service & Modeling dependencies:
-# - fastapi / uvicorn (for HTTP service integration with Node.js/Express backend)
-# - pydantic (for request/response schema validation)
-# - route optimization engine (e.g. ortools / scipy / networkx)
-# - forecasting & economics dependencies (e.g. scikit-learn / pandas)
