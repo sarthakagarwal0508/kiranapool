@@ -1,0 +1,193 @@
+openapi: 3.0.3
+info:
+  title: KiranaPool Auth and Shops API
+  version: 1.0.0
+  description: Auth and Shops endpoints implemented so far. Google auth needs a real Google ID token.
+servers:
+  - url: http://localhost:5000/api
+tags:
+  - name: Health
+  - name: Auth
+  - name: Shops
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Check API/database health
+      security: []
+      responses:
+        '200': { description: Healthy }
+        '503': { description: Database disconnected }
+  /auth/signup:
+    post:
+      tags: [Auth]
+      summary: Sign up using email/password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SignupRequest' }
+      responses:
+        '201': { description: Created; returns token and user }
+        '400': { description: Invalid request }
+        '409': { description: Duplicate email }
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in using email/password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200': { description: Logged in; returns token and user }
+        '400': { description: Missing credentials }
+        '401': { description: Invalid credentials }
+  /auth/google:
+    post:
+      tags: [Auth]
+      summary: Authenticate with Google ID token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GoogleAuthRequest' }
+      responses:
+        '200': { description: Authenticated; returns KiranaPool JWT }
+        '400': { description: Missing token or invalid role }
+        '401': { description: Invalid token or unverified email }
+        '409': { description: Account conflict }
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        '200': { description: Current user }
+        '401': { description: Missing or invalid token }
+  /shops:
+    get:
+      tags: [Shops]
+      summary: List shops visible to current user
+      security:
+        - bearerAuth: []
+      responses:
+        '200': { description: Shop list }
+        '401': { description: Unauthorized }
+    post:
+      tags: [Shops]
+      summary: Create a shop (shopkeeper only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateShopRequest' }
+      responses:
+        '201': { description: Shop created }
+        '400': { description: Invalid shop data }
+        '401': { description: Unauthorized }
+        '403': { description: Shopkeeper role required }
+  /shops/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Shops]
+      summary: Get visible shop by ID
+      security:
+        - bearerAuth: []
+      responses:
+        '200': { description: Shop found }
+        '400': { description: Invalid ID }
+        '401': { description: Unauthorized }
+        '404': { description: Missing or not visible }
+    patch:
+      tags: [Shops]
+      summary: Update owned shop (shopkeeper only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateShopRequest' }
+      responses:
+        '200': { description: Updated }
+        '400': { description: Invalid request }
+        '401': { description: Unauthorized }
+        '403': { description: Shopkeeper role required }
+        '404': { description: Missing or not owned }
+    delete:
+      tags: [Shops]
+      summary: Delete owned shop (shopkeeper only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200': { description: Deleted }
+        '400': { description: Invalid ID }
+        '401': { description: Unauthorized }
+        '403': { description: Shopkeeper role required }
+        '404': { description: Missing or not owned }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    SignupRequest:
+      type: object
+      required: [name, email, password, role]
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+        role: { type: string, enum: [shopkeeper, rider] }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+    GoogleAuthRequest:
+      type: object
+      required: [idToken]
+      properties:
+        idToken: { type: string }
+        role:
+          type: string
+          enum: [shopkeeper, rider]
+          description: Required when creating a new account.
+    Location:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lng: { type: number, minimum: -180, maximum: 180 }
+    CreateShopRequest:
+      type: object
+      required: [name, address, location]
+      properties:
+        name: { type: string }
+        ownerName: { type: string }
+        phone: { type: string }
+        address: { type: string }
+        location: { $ref: '#/components/schemas/Location' }
+    UpdateShopRequest:
+      type: object
+      properties:
+        name: { type: string }
+        ownerName: { type: string }
+        phone: { type: string }
+        address: { type: string }
+        location: { $ref: '#/components/schemas/Location' }
+        isActive: { type: boolean }
