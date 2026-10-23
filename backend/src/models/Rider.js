@@ -39,6 +39,8 @@ const riderSchema = new mongoose.Schema(
         max: 180,
       },
     },
+    // Updated whenever a rider submits a fresh GPS location. This is separate from document timestamps.
+    locationUpdatedAt: { type: Date, default: null },
     isAvailable: {
       type: Boolean,
       default: true,

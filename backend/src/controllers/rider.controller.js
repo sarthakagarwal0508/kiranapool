@@ -229,6 +229,11 @@ const updateMyRiderProfile = async (req, res, next) => {
       updates.name = updates.name.trim();
     }
 
+    // GPS updates are self-service: the authenticated rider can only update their own location.
+    if (updates.location !== undefined) {
+      updates.locationUpdatedAt = new Date();
+    }
+
     // Availability is managed by the delivery workflow; a rider cannot mark
     // themselves available while a delivery plan is still active.
     if (updates.isAvailable === true) {
