@@ -11,6 +11,7 @@ const planRoutes = require("./routes/plan.route");
 const legacyPlanRoutes = require("./routes/plan.legacy.route");
 const forecastRoutes = require("./routes/forecast.route");
 const mapRoutes = require("./routes/map.route");
+const mlRoutes = require("./routes/ml.route");
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use("/api/plans", planRoutes);
 app.use("/api/plan", legacyPlanRoutes);
 app.use("/api/forecasts", forecastRoutes);
 app.use("/api/map", mapRoutes);
+app.use("/api/ml", mlRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

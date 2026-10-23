@@ -42,10 +42,18 @@ Base URL: `http://localhost:5000/api`. Protected endpoints use `Authorization: B
 | 36 | Forecasts | PATCH | `/forecasts/:id/actual` | Wholesaler who generated forecast |
 | 37 | Legacy Plan alias | POST | `/plan` | Wholesaler; same create handler as `/plans` |
 | 38 | Legacy Plan alias | GET | `/plan/latest` | Wholesaler/assigned rider; same handler as `/plans/latest` |
+| 39 | ML health proxy | GET | `/ml/health` | JWT; all app roles |
+| 40 | ML raw route | POST | `/ml/route` | Wholesaler JWT; forwards order batch/route request to FastAPI |
+| 41 | ML route solver | POST | `/ml/routes/solve` | Wholesaler JWT; forwards stop-sequencing request |
+| 42 | ML batch | POST | `/ml/batch` | Wholesaler JWT; forwards order grouping request |
+| 43 | ML end-to-end planner | POST | `/ml/routes/plan` | Wholesaler JWT; forwards batching/routing/cost request |
+| 44 | ML travel-time | POST | `/ml/travel-time` | Wholesaler/rider JWT |
+| 45 | ML delivery economics | POST | `/ml/economics/costs` | Wholesaler JWT |
 
-**Total: 38 endpoint paths** (36 feature routes plus 2 backward-compatible singular plan paths). Static plan routes (`/preview`, `/auto-pool`, `/latest`) are registered before `/:id`.
+**Total: 45 endpoint paths** (43 feature routes plus 2 backward-compatible singular plan paths). Static plan routes (`/preview`, `/auto-pool`, `/latest`) are registered before `/:id`.
 
 Notes:
 - New B2B replenishment orders include a `warehouse` plus future `deliverySlotStart`/`deliverySlotEnd`; legacy orders without a warehouse remain supported but do not participate in pooling or wholesaler dashboards.
 - Pools never combine different warehouses, require overlapping delivery windows, enforce configurable destination spread and stop count, and report an estimated route plus total and shop-wise cost savings.
 - Distances are approximate (great-circle distance multiplied by a road-factor assumption); they are not live map-provider road routes.
+- ML routes are authenticated Node-to-FastAPI proxies. Plan preview/creation/auto-pooling attempts ML batching, route sequencing and cost calculation when enabled. The backend validates ML results and uses local estimates when an output shape cannot safely map to stored orders. See `ML_INTEGRATION.md`.

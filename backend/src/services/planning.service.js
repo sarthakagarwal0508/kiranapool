@@ -69,12 +69,21 @@ const groupCompatibleOrders = (orders, config = getPlanningConfig()) => {
   return groups;
 };
 
-const calculateRoute = (warehouse, orders, config = getPlanningConfig()) => {
+const calculateRoute = (warehouse, orders, config = getPlanningConfig(), sequenceOrderIds = null) => {
   const warehouseLocation = warehouse?.location;
   if (!warehouseLocation || !Array.isArray(orders) || orders.length === 0) {
     throw new Error("A warehouse location and at least one order are required to calculate a route");
   }
-  const remaining = orders.map((order) => ({ order, distanceKm: 0 }));
+  const inputOrders = [...orders];
+  let mlSequence = null;
+  if (Array.isArray(sequenceOrderIds) && sequenceOrderIds.length === inputOrders.length) {
+    const byId = new Map(inputOrders.map((order) => [String(order._id), order]));
+    const ids = sequenceOrderIds.map(String);
+    if (new Set(ids).size === inputOrders.length && ids.every((id) => byId.has(id))) {
+      mlSequence = ids.map((id) => byId.get(id));
+    }
+  }
+  const remaining = (mlSequence || inputOrders).map((order) => ({ order, distanceKm: 0 }));
   let current = warehouseLocation;
   let distanceRoadKm = 0;
   let elapsedMinutes = 0;
@@ -82,9 +91,13 @@ const calculateRoute = (warehouse, orders, config = getPlanningConfig()) => {
   while (remaining.length) {
     let nearestIndex = 0;
     let nearestDistance = Infinity;
-    for (let i = 0; i < remaining.length; i += 1) {
-      const distance = haversineKm(current, remaining[i].order.location);
-      if (distance < nearestDistance) { nearestDistance = distance; nearestIndex = i; }
+    if (!mlSequence) {
+      for (let i = 0; i < remaining.length; i += 1) {
+        const distance = haversineKm(current, remaining[i].order.location);
+        if (distance < nearestDistance) { nearestDistance = distance; nearestIndex = i; }
+      }
+    } else {
+      nearestDistance = haversineKm(current, remaining[0].order.location);
     }
     const [{ order }] = remaining.splice(nearestIndex, 1);
     const legKm = nearestDistance * config.roadFactor;
@@ -165,7 +178,7 @@ const calculateRoute = (warehouse, orders, config = getPlanningConfig()) => {
         costPerStop: config.costPerStop,
         averageSpeedKmph: config.averageSpeedKmph,
         serviceMinutesPerStop: config.serviceMinutesPerStop,
-        routingAlgorithm: "nearest-neighbour heuristic using straight-line distance adjusted by road factor",
+        routingAlgorithm: mlSequence ? "ML stop sequence with locally recomputed distance/cost estimates" : "nearest-neighbour heuristic using straight-line distance adjusted by road factor",
       },
     },
   };

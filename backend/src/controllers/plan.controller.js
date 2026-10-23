@@ -7,11 +7,9 @@ const {
   getPlanningConfig,
   commonSlotWindow,
   pointsSpreadKm,
-  isPoolCompatible,
-  groupCompatibleOrders,
-  calculateRoute,
   round,
 } = require("../services/planning.service");
+const { calculateRouteWithMl, batchOrdersWithMl } = require("../services/ml-planning.service");
 
 const warehouseOwnedBy = async (warehouseId, userId, activeOnly = true) => {
   if (!mongoose.isValidObjectId(warehouseId)) return null;
@@ -50,7 +48,7 @@ const checkCompatibleOrders = (orders) => {
 const savePlanForOrders = async ({ warehouse, orders, userId, name }) => {
   const issue = checkCompatibleOrders(orders);
   if (issue) throw Object.assign(new Error(issue), { statusCode: 400 });
-  const routeFeasibility = calculateRoute(warehouse, orders);
+  const routeFeasibility = await calculateRouteWithMl(warehouse, orders);
   if (!routeFeasibility.metrics.slotFeasible) {
     throw Object.assign(new Error("Estimated route duration does not fit inside the shared delivery slot. Split the orders or choose a longer slot."), { statusCode: 400 });
   }
@@ -67,7 +65,7 @@ const savePlanForOrders = async ({ warehouse, orders, userId, name }) => {
     pooled: metrics.pooled,
     solo: metrics.solo,
     savings: metrics.savings,
-    meta: { ...metrics, createdBy: userId, algorithm: "warehouse-time-slot-nearest-neighbour-v1" },
+    meta: { ...metrics, createdBy: userId, algorithm: routeFeasibility.mlIntegration?.routeSolver?.sequenceApplied ? "fastapi-ml-route-solver" : "local-nearest-neighbour-with-ml-economics-when-available", mlIntegration: routeFeasibility.mlIntegration },
     status: "planned",
   });
   const result = await Order.updateMany(
@@ -94,14 +92,16 @@ const previewPlan = async (req, res, next) => {
     if (orderIds) {
       const issue = checkCompatibleOrders(orders);
       if (issue) return res.status(400).json({ success: false, message: issue, details: { orderCount: orders.length, stopSpreadKm: round(pointsSpreadKm(orders), 2), maxStopSpreadKm: getPlanningConfig().maxStopSpreadKm } });
-      const { route, metrics } = calculateRoute(warehouse, orders);
-      return res.status(200).json({ success: true, count: orders.length, data: { warehouse, orders, route, metrics } });
+      const { route, metrics, mlIntegration } = await calculateRouteWithMl(warehouse, orders);
+      return res.status(200).json({ success: true, count: orders.length, data: { warehouse, orders, route, metrics, mlIntegration } });
     }
-    const groups = groupCompatibleOrders(orders).map((group, index) => {
-      const { route, metrics } = calculateRoute(warehouse, group);
-      return { groupNumber: index + 1, orderCount: group.length, orders: group, route, metrics };
-    });
-    return res.status(200).json({ success: true, count: orders.length, data: { warehouse, groups, groupCount: groups.length, message: "Pending orders grouped by overlapping delivery slot and location compatibility; preview does not change order status" } });
+    const batching = await batchOrdersWithMl(orders);
+    const groups = [];
+    for (const [index, group] of batching.groups.entries()) {
+      const routeResult = await calculateRouteWithMl(warehouse, group);
+      groups.push({ groupNumber: index + 1, orderCount: group.length, orders: group, route: routeResult.route, metrics: routeResult.metrics, mlIntegration: routeResult.mlIntegration });
+    }
+    return res.status(200).json({ success: true, count: orders.length, data: { warehouse, groups, groupCount: groups.length, mlBatching: batching.integration, message: "Pending orders grouped by ML when its response matches the schema and local constraints; otherwise local fallback is used. Preview does not change order status" } });
   } catch (error) { if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message }); next(error); }
 };
 
@@ -130,7 +130,15 @@ const autoPoolOrders = async (req, res, next) => {
     const orders = await Order.find({ warehouse: { $in: warehouses.map((w) => w._id) }, status: "pending", plan: null, deliverySlotStart: { $ne: null }, deliverySlotEnd: { $ne: null } })
       .populate("shop", "name address area location")
       .sort({ deliverySlotStart: 1, createdAt: 1 });
-    const groups = groupCompatibleOrders(orders);
+    const groups = [];
+    const batchingByWarehouse = [];
+    for (const warehouse of warehouses) {
+      const warehouseOrders = orders.filter((order) => String(order.warehouse?._id || order.warehouse) === String(warehouse._id));
+      if (!warehouseOrders.length) continue;
+      const batching = await batchOrdersWithMl(warehouseOrders);
+      batchingByWarehouse.push({ warehouseId: String(warehouse._id), ...batching.integration });
+      groups.push(...batching.groups);
+    }
     const plannedIds = new Set();
     const createdPlans = [];
     for (const group of groups) {
@@ -157,6 +165,11 @@ const autoPoolOrders = async (req, res, next) => {
       data: await Plan.find({ _id: { $in: createdPlans.map((plan) => plan._id) } }).populate("warehouse", "name address").sort({ createdAt: -1 }),
       unplannedOrderCount: orders.length - createdPlans.reduce((sum, plan) => sum + plan.orders.length, 0),
       config: getPlanningConfig(),
+      mlIntegration: {
+        enabled: Boolean(process.env.ML_SERVICE_URL) && String(process.env.ML_ROUTE_INTEGRATION_ENABLED ?? "true").toLowerCase() !== "false",
+        batchingByWarehouse,
+        routeSolverAndEconomics: "Attempted per created plan when enabled; each response is validated and local estimates are retained when a response cannot be mapped safely.",
+      },
     });
   } catch (error) { next(error); }
 };

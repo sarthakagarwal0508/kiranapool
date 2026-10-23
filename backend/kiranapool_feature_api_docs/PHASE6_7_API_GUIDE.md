@@ -87,7 +87,7 @@ Wholesalers see only orders placed against their own warehouses; shopkeepers see
 }
 ```
 
-`orderIds` is optional. Without it, the backend previews all pending/unplanned supply orders from that warehouse. Optional `slotStart` and `slotEnd` filter the preview. If `orderIds` is provided, returns a preview for that one proposed plan. Without it, returns candidate groups already clustered by time/location compatibility. Each group includes a suggested stop order, estimated pooled and solo distances/costs/time, total and shop-wise savings, and slot feasibility. Preview never changes order statuses.
+`orderIds` is optional. Without it, the backend previews all pending/unplanned supply orders from that warehouse. Optional `slotStart` and `slotEnd` filter the preview. If `orderIds` is provided, returns a preview for that one proposed plan. Without it, returns candidate groups already clustered by time/location compatibility. Each group includes a suggested stop order, estimated pooled and solo distances/costs/time, total and shop-wise savings, and slot feasibility. When ML routing is enabled, the backend attempts FastAPI batching, stop sequencing and economics; an ML response is used only when it maps safely to local orders. Otherwise local planning is used. Preview never changes order statuses.
 
 Compatibility aliases from the earlier API notes are also supported: `POST /plan` and `GET /plan/latest`. Use the plural `/plans` routes for the full current API.
 
@@ -105,7 +105,7 @@ Creates the plan and moves its pending orders to `planned`. Orders must belong t
 
 ### `POST /plans/auto-pool` — wholesaler only
 
-Optional body: `{ "warehouseId": "<WAREHOUSE_ID>" }`. Without `warehouseId`, scans all active warehouses owned by the wholesaler. Groups pending/unplanned orders by exact warehouse, overlapping time slots and delivery-location spread, then creates planned routes for compatible groups. Single eligible orders may also become one-stop plans so they can be assigned/delivered.
+Optional body: `{ "warehouseId": "<WAREHOUSE_ID>" }`. Without `warehouseId`, scans all active warehouses owned by the wholesaler. Attempts FastAPI `/batch` separately per owned warehouse; the backend accepts the batch result only if every order maps exactly once and groups pass local time-window/distance/stop-count checks. If not, local compatibility grouping is used. It then attempts ML route sequencing and economics while saving each plan. Groups never cross warehouses. Single eligible orders may also become one-stop plans so they can be assigned/delivered.
 
 ### `GET /plans`, `GET /plans/latest`, `GET /plans/:id`
 
@@ -164,3 +164,8 @@ Demo accounts use the password `KiranaDemo@123`:
 - `demo.rider@kiranapool.test`
 
 The seed script creates 2 warehouses, 4 kirana shops, one rider, 4 weeks of synthetic historical supply orders and future pending orders with compatible delivery slots. It refreshes only orders marked `demoSeed: true` and plans/forecasts for the demo wholesaler; do not use these credentials outside a local/demo environment.
+
+
+### ML planning proxy endpoints
+
+The backend exposes authenticated FastAPI proxies under `/ml`: `GET /ml/health`, `POST /ml/route`, `POST /ml/routes/solve`, `POST /ml/batch`, `POST /ml/routes/plan`, `POST /ml/travel-time`, and `POST /ml/economics/costs`. These endpoints forward JSON to the corresponding FastAPI paths. See `../ML_INTEGRATION.md` for role access and the supplied schema's caveats. The route/batch/economics schemas were marked inferred in the source draft and must be checked against the live FastAPI `/openapi.json` and `/docs` before relying on undocumented fields.

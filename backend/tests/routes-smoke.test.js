@@ -28,6 +28,13 @@ test("Phase 6/7 protected routes are mounted and reject missing JWTs", async () 
       ["/plans/auto-pool", "POST"],
       ["/forecasts", "GET"],
       ["/forecasts/run", "POST"],
+      ["/ml/health", "GET"],
+      ["/ml/route", "POST"],
+      ["/ml/routes/plan", "POST"],
+      ["/ml/routes/solve", "POST"],
+      ["/ml/batch", "POST"],
+      ["/ml/travel-time", "POST"],
+      ["/ml/economics/costs", "POST"],
       ["/orders", "GET"],
       ["/orders/manual", "POST"],
     ]) {

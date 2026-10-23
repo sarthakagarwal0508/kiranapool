@@ -28,3 +28,42 @@ test("fallback builds shop-wise and area-wise forecasts for the horizon", () => 
   assert.ok(rows.length >= 18);
   assert.ok(rows.every((r) => r.predictedOrders >= 0));
 });
+
+test("generic ML client joins the configured root URL and endpoint path", async () => {
+  const { callMlEndpoint } = require("../src/services/ml.service");
+  const originalFetch = global.fetch;
+  const originalToken = process.env.ML_SERVICE_TOKEN;
+  let request;
+  global.fetch = async (url, options) => {
+    request = { url, options };
+    return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true }) };
+  };
+  delete process.env.ML_SERVICE_TOKEN;
+  try {
+    const result = await callMlEndpoint({ baseUrl: "https://ml.example.test/", path: "/routes/solve", requestBody: { stops: [] }, timeoutMs: 1000 });
+    assert.equal(request.url, "https://ml.example.test/routes/solve");
+    assert.equal(request.options.method, "POST");
+    assert.deepEqual(JSON.parse(request.options.body), { stops: [] });
+    assert.equal(result.data.ok, true);
+  } finally {
+    global.fetch = originalFetch;
+    if (originalToken == null) delete process.env.ML_SERVICE_TOKEN;
+    else process.env.ML_SERVICE_TOKEN = originalToken;
+  }
+});
+
+test("generic ML client reports a response timeout without exposing request details", async () => {
+  const { callMlEndpoint } = require("../src/services/ml.service");
+  const originalFetch = global.fetch;
+  global.fetch = async (_url, options) => new Promise((_resolve, reject) => {
+    options.signal.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })), { once: true });
+  });
+  try {
+    await assert.rejects(
+      () => callMlEndpoint({ baseUrl: "https://ml.example.test", path: "/health", method: "GET", timeoutMs: 100 }),
+      (error) => error.code === "ML_TIMEOUT" && error.statusCode === 504,
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+});

@@ -36,7 +36,7 @@ Run `npm test`. Tests cover pooling/time compatibility, route/cost calculations,
 - Synthetic history/pending orders for demos.
 - Shop-wise and area-wise forecasts in morning/afternoon/evening India-time slots.
 - Forecast summaries and actual-demand recording.
-- Optional FastAPI request/response integration and local historical-baseline fallback.
+- FastAPI demand forecasting with local historical-baseline fallback; ML-backed batch/route/economics attempts for plan preview and plan creation, with validation-safe local fallback.
 
 Import `kiranapool_feature_api_docs/KiranaPool_Phase6_7.postman_collection.json` into Postman for a ready-made workflow. Read `kiranapool_feature_api_docs/PHASE6_7_API_GUIDE.md` and `ML_INTEGRATION.md` before testing APIs.
 

@@ -34,6 +34,10 @@ const startOfIstDay = (value) => {
 };
 
 const addCalendarDays = (value, days) => new Date(startOfIstDay(value).getTime() + days * 86400000);
+const round = (value, digits = 2) => {
+  const factor = 10 ** digits;
+  return Math.round((value + Number.EPSILON) * factor) / factor;
+};
 
 const buildFallbackForecasts = ({ orders, shops, horizonDays, groupBy = "both", now = new Date() }) => {
   const start = startOfIstDay(now);
@@ -69,9 +73,7 @@ const buildFallbackForecasts = ({ orders, shops, horizonDays, groupBy = "both", 
           const dailyCounts = sampleDates.map((date) => historicalCount((r) => r.date === date && r.key === slot.key && r.shopId === shopId));
           const prediction = dailyCounts.length ? dailyCounts.reduce((a, b) => a + b, 0) / dailyCounts.length : 0;
           perShopPredictions.push({ shopId, shop, area: deriveArea(shop), predictedOrders: round(prediction, 2), confidence: Math.min(0.9, 0.25 + dailyCounts.filter((n) => n > 0).length * 0.15), sampleDays: dailyCounts.length });
-          if (groupBy !== "area") {
-            forecasts.push({ forecastDate, scope: "shop", shop: shopId, area: deriveArea(shop), timeSlot: slot.key, slotStart, slotEnd, predictedOrders: round(prediction, 2), confidence: Math.min(0.9, 0.25 + dailyCounts.filter((n) => n > 0).length * 0.15), modelSource: "local-fallback", meta: { algorithm: "four-week same-weekday/time-slot average", sampleDays: dailyCounts.length } });
-          }
+          forecasts.push({ forecastDate, scope: "shop", shop: shopId, area: deriveArea(shop), timeSlot: slot.key, slotStart, slotEnd, predictedOrders: round(prediction, 2), confidence: Math.min(0.9, 0.25 + dailyCounts.filter((n) => n > 0).length * 0.15), modelSource: "local-fallback", meta: { algorithm: "four-week same-weekday/time-slot average", sampleDays: dailyCounts.length } });
         }
       }
       if (groupBy !== "shop") {
@@ -94,32 +96,82 @@ const buildFallbackForecasts = ({ orders, shops, horizonDays, groupBy = "both", 
   return forecasts;
 };
 
-const round = (value, digits = 2) => {
-  const factor = 10 ** digits;
-  return Math.round((value + Number.EPSILON) * factor) / factor;
+const getMlBaseUrl = (baseUrl = process.env.ML_SERVICE_URL) => {
+  if (typeof baseUrl !== "string" || !baseUrl.trim()) {
+    throw Object.assign(new Error("ML_SERVICE_URL is not configured"), { code: "ML_NOT_CONFIGURED", statusCode: 503 });
+  }
+  const normalized = baseUrl.trim().replace(/\/+$/, "");
+  try {
+    const parsed = new URL(normalized);
+    if (!["https:", "http:"].includes(parsed.protocol)) throw new Error("Unsupported ML service protocol");
+    return normalized;
+  } catch (error) {
+    throw Object.assign(new Error("ML_SERVICE_URL must be a valid HTTP(S) URL"), { code: "ML_INVALID_URL", statusCode: 503 });
+  }
 };
 
-const callMlForecast = async ({ baseUrl, requestBody, timeoutMs = 5000 }) => {
-  if (!baseUrl) throw new Error("ML_SERVICE_URL is not configured");
-  const url = baseUrl.replace(/\/+$/, "");
-  const endpoint = url.endsWith("/forecast") ? url : `${url}/forecast`;
+const callMlEndpoint = async ({ baseUrl = process.env.ML_SERVICE_URL, path, method = "POST", requestBody, timeoutMs = Number(process.env.ML_SERVICE_TIMEOUT_MS) || 5000 }) => {
+  if (typeof path !== "string" || !path.startsWith("/") || path.startsWith("//")) {
+    throw Object.assign(new Error("ML endpoint path must be a fixed absolute path"), { code: "ML_INVALID_PATH", statusCode: 400 });
+  }
+  const root = getMlBaseUrl(baseUrl);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const timeout = setTimeout(() => controller.abort(), Math.max(100, Number(timeoutMs) || 5000));
+  const headers = { Accept: "application/json" };
+  if (requestBody !== undefined) headers["Content-Type"] = "application/json";
+  if (process.env.ML_SERVICE_TOKEN) headers.Authorization = `Bearer ${process.env.ML_SERVICE_TOKEN}`;
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...(process.env.ML_SERVICE_TOKEN ? { Authorization: `Bearer ${process.env.ML_SERVICE_TOKEN}` } : {}) },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal,
-    });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(`ML service returned HTTP ${response.status}`);
-    const predictions = Array.isArray(body) ? body : body.forecasts;
-    if (!Array.isArray(predictions)) throw new Error("ML service response must be an array or { forecasts: [] }");
-    return { forecasts: predictions, modelSource: body.model || body.modelSource || "fastapi", serviceMeta: body.meta || {} };
+    let response;
+    try {
+      response = await fetch(`${root}${path}`, {
+        method,
+        headers,
+        ...(requestBody !== undefined ? { body: JSON.stringify(requestBody) } : {}),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error.name === "AbortError") {
+        throw Object.assign(new Error("ML service request timed out"), { code: "ML_TIMEOUT", statusCode: 504 });
+      }
+      throw Object.assign(new Error("Could not connect to ML service"), { code: "ML_NETWORK_ERROR", statusCode: 502 });
+    }
+    const raw = await response.text();
+    let data = null;
+    if (raw) {
+      try { data = JSON.parse(raw); } catch { data = { rawText: raw.slice(0, 2000) }; }
+    }
+    if (!response.ok) {
+      const detail = typeof data?.detail === "string" ? data.detail : typeof data?.message === "string" ? data.message : `ML service returned HTTP ${response.status}`;
+      throw Object.assign(new Error(detail.slice(0, 300)), { code: "ML_UPSTREAM_ERROR", statusCode: 502, upstreamStatus: response.status });
+    }
+    return { status: response.status, data };
   } finally {
     clearTimeout(timeout);
   }
 };
 
-module.exports = { SLOT_DEFINITIONS, getSlotKey, deriveArea, buildFallbackForecasts, callMlForecast, startOfIstDay, addCalendarDays, round };
+const callMlForecast = async ({ baseUrl, requestBody, timeoutMs = Number(process.env.ML_SERVICE_TIMEOUT_MS) || 5000 }) => {
+  let root = getMlBaseUrl(baseUrl);
+  // Accept either the service root or an explicitly configured /forecast URL.
+  if (root.endsWith("/forecast")) root = root.slice(0, -"/forecast".length);
+  const response = await callMlEndpoint({ baseUrl: root, path: "/forecast", method: "POST", requestBody, timeoutMs });
+  const body = response.data;
+  const predictions = Array.isArray(body) ? body : body?.forecasts;
+  if (!Array.isArray(predictions)) {
+    throw Object.assign(new Error("ML service response must be an array or { forecasts: [] }"), { code: "ML_INVALID_RESPONSE", statusCode: 502 });
+  }
+  return { forecasts: predictions, modelSource: body?.model || body?.modelSource || "fastapi-ml", serviceMeta: body?.meta || {} };
+};
+
+module.exports = {
+  SLOT_DEFINITIONS,
+  getSlotKey,
+  deriveArea,
+  buildFallbackForecasts,
+  callMlEndpoint,
+  callMlForecast,
+  getMlBaseUrl,
+  startOfIstDay,
+  addCalendarDays,
+  round,
+};

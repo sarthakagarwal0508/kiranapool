@@ -18,11 +18,19 @@ const generateForecasts = async (req, res, next) => {
     const warehouses = await Warehouse.find({ owner: req.user.id, isActive: true }).select("_id");
     if (!warehouses.length) return res.status(400).json({ success: false, message: "Create an active warehouse and receive supply orders before generating forecasts" });
     const warehouseIds = warehouses.map((w) => w._id);
-    const history = await Order.find({ warehouse: { $in: warehouseIds }, deliverySlotStart: { $ne: null } })
+    const now = new Date();
+    // Only completed, past deliveries are training/history records. Pending/future orders must not leak into forecast history.
+    const history = await Order.find({
+      warehouse: { $in: warehouseIds },
+      status: "delivered",
+      deliverySlotStart: { $ne: null, $lt: now },
+    })
       .populate("shop", "name address area location")
       .sort({ deliverySlotStart: -1 })
       .limit(5000);
-    const shopIds = [...new Set(history.map((order) => String(order.shop?._id || order.shop)).filter(Boolean))];
+    // Include shops seen in any orders so a new shop can still receive a zero/baseline prediction before it has delivered history.
+    const allShopOrderRefs = await Order.find({ warehouse: { $in: warehouseIds }, shop: { $ne: null } }).distinct("shop");
+    const shopIds = [...new Set([...history.map((order) => String(order.shop?._id || order.shop)), ...allShopOrderRefs.map(String)].filter(Boolean))];
     const shops = shopIds.length ? await Shop.find({ _id: { $in: shopIds } }) : [];
     if (!shops.length) return res.status(400).json({ success: false, message: "No shop orders found for these warehouses yet" });
 
