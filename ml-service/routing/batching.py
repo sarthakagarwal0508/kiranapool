@@ -51,7 +51,7 @@ def _is_compatible(order, batch, max_distance_km, max_time_window_minutes, max_o
         
     return True
 
-def batch_orders(orders, max_distance_km=1.2, max_time_window_minutes=8.0, max_orders_per_batch=4, max_weight_kg=18.0):
+def batch_orders(orders, max_distance_km=1.2, max_time_window_minutes=10.0, max_orders_per_batch=3, max_weight_kg=18.0):
     if not orders:
         return []
     

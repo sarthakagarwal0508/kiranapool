@@ -1,4 +1,4 @@
-from routing.distance import haversine_distance
+from routing.distance import haversine_distance, _parse_coordinate
 
 def _extract_coordinates(item):
     if isinstance(item, (tuple, list)):
@@ -18,14 +18,14 @@ def calculate_route_distance(route):
         raise ValueError("Route cannot be None")
     if not isinstance(route, list):
         raise TypeError("Route must be a list of stops")
-    if len(route) < 2:
+    
+    parsed_coords = [_parse_coordinate(_extract_coordinates(stop)) for stop in route]
+    if len(parsed_coords) < 2:
         return 0.0
     
     total_dist = 0.0
-    for i in range(len(route) - 1):
-        c1 = _extract_coordinates(route[i])
-        c2 = _extract_coordinates(route[i + 1])
-        total_dist += haversine_distance(c1, c2)
+    for i in range(len(parsed_coords) - 1):
+        total_dist += haversine_distance(parsed_coords[i], parsed_coords[i + 1])
     return total_dist
 
 def calculate_travel_time(distance_km, speed_kmh=20.0):

@@ -1,12 +1,13 @@
+from typing import Any, Dict, List, Optional
 from routing.heuristic import build_route
 
 try:
-    from ortools.constraint_solver import routing_enums_pb2, pywrapcp
+    from ortools.constraint_solver import routing_enums_pb2, pywrapcp  # type: ignore
     ORTOOLS_AVAILABLE = True
-except (ImportError, ModuleNotFoundError):
+except ImportError:
     ORTOOLS_AVAILABLE = False
 
-def solve_route(stops, start_location=None, algorithm="auto"):
+def solve_route(stops: List[Any], start_location: Optional[Any] = None, algorithm: str = "auto") -> Dict[str, Any]:
     if algorithm == "heuristic":
         route = build_route(stops, start_location)
         return {
