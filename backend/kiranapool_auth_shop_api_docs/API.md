@@ -1,136 +1,410 @@
-# KiranaPool API Reference — Auth + Shops
+# KiranaPool API Documentation
 
-## Conventions
-Base URL: `http://localhost:5000/api`
-JSON requests use `Content-Type: application/json`.
-Protected routes require `Authorization: Bearer <KIRANAPOOL_JWT>`.
-The Google ID token is only sent to `/auth/google`; other protected APIs use the KiranaPool JWT.
+**Version:** 0.2.0  
+**Backend:** Node.js, Express.js, MongoDB Atlas  
+**Authentication:** JWT Bearer Token
+
+## Base URL
+
+Local development:
+
+`http://localhost:5000/api`
 
 ## Authentication
 
-### POST `/auth/signup`
-No auth required.
-Request:
-```json
-{
-  "name": "Test Shopkeeper",
-  "email": "shopkeeper1@example.com",
-  "password": "TestPass123!",
-  "role": "shopkeeper"
-}
-```
-Fields: `name` string; `email` string; `password` minimum 8 characters; `role` is `shopkeeper` or `rider`.
-Success: `201 Created`, returns `token` and `user`.
-Errors: `400` invalid input; `409` duplicate email.
+Protected endpoints ke liye request header:
 
-### POST `/auth/login`
-No auth required.
-Request:
-```json
-{
-  "email": "shopkeeper1@example.com",
-  "password": "TestPass123!"
-}
-```
-Success: `200 OK`, returns `token` and `user`.
-Errors: `400` missing credentials; `401` invalid credentials.
+`Authorization: Bearer <JWT_TOKEN>`
 
-### POST `/auth/google`
-No auth required.
-Request:
-```json
-{
-  "idToken": "<REAL_GOOGLE_ID_TOKEN>",
-  "role": "shopkeeper"
-}
-```
-The token must come from Google Sign-In and be verified by the backend. `role` is needed for a new account and must be `shopkeeper` or `rider`. Existing accounts retain their stored role. Requires `GOOGLE_CLIENT_ID` in backend `.env`.
-Success: `200 OK`, returns a KiranaPool JWT and user. Errors can include `400`, `401`, `409`, or `500` for missing configuration. Real Google token flow is not confirmed tested yet.
+Supported roles:
+- `shopkeeper`
+- `rider`
 
-### GET `/auth/me`
-Requires Bearer JWT.
-Returns current user:
+Admin role supported nahi hai.
+
+---
+
+## 1. Health API
+
+### `GET /health`
+
+API aur MongoDB connection status check karta hai.
+
+**Authentication:** Not required
+
+**Success — `200 OK`**
 ```json
 {
   "success": true,
-  "user": {
-    "id": "<USER_ID>",
-    "name": "Test Shopkeeper",
-    "email": "shopkeeper1@example.com",
-    "role": "shopkeeper"
+  "message": "KiranaPool API is healthy",
+  "services": {
+    "api": "running",
+    "database": "connected"
   }
 }
 ```
-Errors: `401` missing/invalid/expired token or account no longer exists.
 
-## Shops
+Database disconnected hone par `503 Service Unavailable` return hota hai.
 
-All shop endpoints require a valid KiranaPool JWT.
+---
 
-### GET `/shops`
-Lists visible shops. Shopkeepers see their own shops; riders see active shops only.
-Success: `200 OK`, `{ "success": true, "count": 0, "data": [] }`.
+## 2. Authentication APIs
 
-### POST `/shops`
-Allowed role: `shopkeeper`. Backend sets `owner` from authenticated JWT; do not send owner from frontend.
-Request:
+### 2.1 Signup
+
+`POST /auth/signup`
+
+Naya shopkeeper ya rider account create karta hai.
+
+**Request body**
 ```json
 {
-  "name": "Sharma Kirana",
-  "ownerName": "Amit Sharma",
-  "phone": "9876543210",
-  "address": "Malviya Nagar, Jaipur",
-  "location": { "lat": 26.854, "lng": 75.824 }
+  "name": "Aman Sharma",
+  "email": "aman@example.com",
+  "password": "example-password",
+  "role": "shopkeeper"
 }
 ```
-Success: `201 Created`, created shop in `data`.
-Errors: `400` invalid name/address/location; `401` no/invalid token; `403` wrong role.
 
-### GET `/shops/:id`
-Shopkeepers can access their own shops; riders can access active shops.
-Errors: `400` malformed ID; `401` auth failure; `404` missing/not visible.
+Rules:
+- Password minimum 8 characters.
+- Email unique hona chahiye.
+- Role `shopkeeper` ya `rider` hona chahiye.
 
-### PATCH `/shops/:id`
-Allowed role: `shopkeeper`; owner only.
-Supported fields: `name`, `ownerName`, `phone`, `address`, `location`, `isActive`.
-Example:
+**Success:** `201 Created`
+
+**Possible errors:** `400` validation error, `409` duplicate email.
+
+### 2.2 Login
+
+`POST /auth/login`
+
+**Request body**
 ```json
-{ "name": "Sharma Kirana Store", "isActive": true }
-```
-Errors: `400` invalid input/ID; `401` auth failure; `403` wrong role; `404` missing or not owned.
-
-### DELETE `/shops/:id`
-Allowed role: `shopkeeper`; owner only. This permanently deletes the shop document.
-Errors: `400` malformed ID; `401` auth failure; `403` wrong role; `404` missing or not owned.
-
-## Health
-### GET `/health`
-Full URL: `http://localhost:5000/api/health`. No auth required.
-
-## Frontend usage
-Suggested Vite env:
-```env
-VITE_API_BASE_URL=http://localhost:5000/api
-```
-Fetch helper:
-```js
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-
-export async function apiRequest(path, options = {}) {
-  const token = localStorage.getItem("token");
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.message || "API request failed");
-  return data;
+{
+  "email": "aman@example.com",
+  "password": "example-password"
 }
 ```
-After successful auth: `localStorage.setItem("token", response.token)`.
-Logout: `localStorage.removeItem("token")`.
-Frontend role checks are only for UI; backend remains responsible for access control.
+
+**Success:** `200 OK`; JWT token aur user information return hoti hai.
+
+Invalid credentials: `401 Unauthorized`.
+
+### 2.3 Google Authentication
+
+`POST /auth/google`
+
+Google Sign-In ID token verify karke KiranaPool JWT issue karta hai.
+
+Request body mein Google ID token aur, new account ke case mein, role bheja jata hai. Exact token field controller ke implementation ke saath match honi chahiye.
+
+**Configuration:** `GOOGLE_CLIENT_ID`
+
+**Note:** Real Google Sign-In token flow ki live testing abhi separately verify karni hai.
+
+### 2.4 Current User
+
+`GET /auth/me`
+
+**Authentication:** Required
+
+Logged-in user ki basic details return karta hai:
+- `id`
+- `name`
+- `email`
+- `role`
+
+---
+
+## 3. Shops APIs
+
+Saare Shops endpoints par JWT required hai.
+
+### 3.1 List Shops
+
+`GET /shops`
+
+- Shopkeeper: apni owned shops.
+- Rider: active shops.
+
+**Success:** `200 OK`
+
+### 3.2 Get Shop by ID
+
+`GET /shops/:id`
+
+Specified shop ki details return karta hai, agar authenticated user us shop ko access kar sakta hai.
+
+**Possible errors:** `400` invalid ID, `404` shop not found ya user ko access nahi hai.
+
+### 3.3 Create Shop
+
+`POST /shops`
+
+**Access:** Shopkeeper only
+
+**Request body**
+```json
+{
+  "name": "Aman Kirana Store",
+  "ownerName": "Aman Sharma",
+  "phone": "9876543210",
+  "address": "Mansarovar, Jaipur",
+  "location": {
+    "lat": 26.854,
+    "lng": 75.764
+  }
+}
+```
+
+Shop ka owner authenticated JWT se set hota hai, request body se nahi.
+
+**Success:** `201 Created`
+
+### 3.4 Update Shop
+
+`PATCH /shops/:id`
+
+**Access:** Owning shopkeeper only
+
+Allowed fields:
+- `name`
+- `ownerName`
+- `phone`
+- `address`
+- `location`
+- `isActive`
+
+**Success:** `200 OK`
+
+### 3.5 Delete Shop
+
+`DELETE /shops/:id`
+
+**Access:** Owning shopkeeper only
+
+Sirf authenticated shopkeeper ki apni shop delete ho sakti hai.
+
+---
+
+## 4. Rider APIs
+
+Saare Rider endpoints par JWT required hai.
+
+### 4.1 List Riders
+
+`GET /riders`
+
+Rider profiles ki list return karta hai.
+
+**Access:** Authenticated users
+
+### 4.2 Get Rider by ID
+
+`GET /riders/:id`
+
+Ek rider ki profile return karta hai.
+
+**Possible errors:** `400` invalid ID, `404` rider not found.
+
+### 4.3 Create Rider Profile
+
+`POST /riders`
+
+**Access:** Rider only
+
+**Request body**
+```json
+{
+  "name": "Test Rider",
+  "phone": "9876543210",
+  "vehicleType": "bike",
+  "location": {
+    "lat": 26.9124,
+    "lng": 75.7873
+  }
+}
+```
+
+Allowed vehicle types:
+- `bike`
+- `scooter`
+- `cycle`
+- `other`
+
+Rider profile authenticated user ke saath automatically link hoti hai. Ek user ki sirf ek Rider profile ho sakti hai.
+
+**Success:** `201 Created`
+
+Duplicate profile: `409 Conflict`.
+
+### 4.4 Get My Rider Profile
+
+`GET /riders/me`
+
+**Access:** Rider only
+
+Logged-in rider ki profile return karta hai.
+
+Profile abhi create nahi hui ho toh `404 Not Found`.
+
+### 4.5 Update My Rider Profile
+
+`PATCH /riders/me`
+
+**Access:** Rider only
+
+**Request body example**
+```json
+{
+  "vehicleType": "scooter",
+  "isAvailable": false,
+  "location": {
+    "lat": 26.915,
+    "lng": 75.79
+  }
+}
+```
+
+Allowed fields:
+- `name`
+- `phone`
+- `vehicleType`
+- `location`
+- `isAvailable`
+
+Rider apni user identity ya delivery assignment is endpoint se change nahi kar sakta.
+
+---
+
+## 5. Orders APIs
+
+Saare Orders endpoints par JWT required hai.
+
+### 5.1 Create Order
+
+`POST /orders`
+
+**Access:** Shopkeeper only
+
+Shopkeeper sirf apni owned shop ke liye order create kar sakta hai.
+
+**Request body**
+```json
+{
+  "shop": "<SHOP_OBJECT_ID>",
+  "customerName": "Rahul Sharma",
+  "customerPhone": "9876543210",
+  "deliveryAddress": "Mansarovar, Jaipur",
+  "location": {
+    "lat": 26.854,
+    "lng": 75.764
+  },
+  "items": [
+    {
+      "name": "Rice 1kg",
+      "quantity": 2,
+      "price": 60
+    },
+    {
+      "name": "Cooking Oil 1L",
+      "quantity": 1,
+      "price": 140
+    }
+  ],
+  "deliveryWindowMin": 60
+}
+```
+
+`totalAmount` server calculate karta hai:
+
+`sum(quantity × price)`
+
+Is example mein total `260` hoga.
+
+**Success:** `201 Created`
+
+**Possible errors:** `400` invalid payload, `404` shop not found/not owned.
+
+### 5.2 List Orders
+
+`GET /orders`
+
+Role-based filtering:
+- Shopkeeper: apni shops ke orders.
+- Rider: apne Rider profile ko assigned orders.
+
+Optional status filter:
+
+`GET /orders?status=pending`
+
+Supported statuses:
+- `pending`
+- `planned`
+- `picked`
+- `delivered`
+- `cancelled`
+
+**Success:** `200 OK`
+
+### 5.3 Get Order by ID
+
+`GET /orders/:id`
+
+- Shopkeeper sirf apni shop ka order dekh sakta hai.
+- Rider sirf apne assigned orders dekh sakta hai.
+
+**Possible errors:** `400` invalid ID, `404` order not found/not visible.
+
+### 5.4 Update Order Status
+
+`PATCH /orders/:id/status`
+
+**Request body example**
+```json
+{
+  "status": "cancelled"
+}
+```
+
+Current implemented rules:
+
+**Shopkeeper**
+- Sirf apni shop ka `pending` order cancel kar sakta hai.
+
+**Assigned rider**
+- `planned` → `picked`
+- `picked` → `delivered`
+
+Rider ke paas us order ka assignment hona zaroori hai.
+
+**Possible errors:**
+- `400` invalid status ya transition.
+- `403` unauthorized action/unassigned rider.
+- `404` order not found/not visible.
+
+Rider assignment delivery-planning module mein implement hoga; isliye rider status updates ke liye order pehle assigned aur `planned` hona chahiye.
+
+---
+
+## 6. Common HTTP Status Codes
+
+| Code | Meaning |
+|---|---|
+| `200` | Request successful |
+| `201` | Resource created |
+| `400` | Invalid request or ID |
+| `401` | Missing/invalid JWT or credentials |
+| `403` | Role or permission denied |
+| `404` | Resource not found/not accessible |
+| `409` | Duplicate account/profile |
+| `500` | Unexpected server error |
+
+## 7. Security and implementation notes
+
+- `.env` ko GitHub par commit nahi karna.
+- Request examples ke placeholder IDs ko real MongoDB ObjectIds se replace karna.
+- Order creation mein item prices request se liye ja rahe hain; production mein trusted product catalogue se verify karna chahiye.
+- Rider directory endpoints currently rider profile fields return karte hain. Production se pehle phone/location visibility restrict karni chahiye.
+- Delivery planning, rider assignment, pooling economics, forecasting aur demo endpoints next phases mein implement/test honge.
