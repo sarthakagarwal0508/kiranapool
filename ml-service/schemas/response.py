@@ -1,8 +1,9 @@
-"""Response schemas for the KiranaPool ML service."""
+
+"""Response schemas for KiranaPool ML service."""
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ResponseBase(BaseModel):
@@ -52,7 +53,7 @@ class CostResponse(ResponseBase):
 
 class ForecastResponse(ResponseBase):
     status: Optional[str] = None
-    forecasts: List[Any] = []
+    forecasts: List[Any] = Field(default_factory=list)
     modelSource: Optional[str] = None
     meta: Optional[Dict[str, Any]] = None
     shop_id: Optional[str] = None
