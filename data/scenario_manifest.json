@@ -1,0 +1,21 @@
+{
+  "random_seed": 12345,
+  "days": 7,
+  "scenarios_cycle": [
+    "normal",
+    "peak",
+    "clustered",
+    "dispersed",
+    "low_demand",
+    "normal",
+    "peak"
+  ],
+  "shop_count": 20,
+  "rider_count": 10,
+  "orders_per_day": 200,
+  "rider_capacity": 10,
+  "cost_config": {
+    "fixed_cost_per_trip": 50.0,
+    "cost_per_km": 10.0
+  }
+}

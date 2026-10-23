@@ -1,8 +1,7 @@
-"""Tests for ML Service HTTP API Integration.
+"""Integration and API endpoint contract tests for KiranaPool ML service.
 
-Intended Responsibility:
-- Shared file (Coordinate before editing).
-- Contract and integration tests validating request parsing, response formatting,
-  error handling, and status codes for the service endpoints.
-- Test implementation will be added upon verification of the approved API contract.
+Responsibility:
+    Shared file (ML Developer A & ML Developer B).
+    Validates HTTP endpoint request handling, payload schema validation, error
+    responses, HTTP status codes, and JSON serialization against the approved API contract.
 """

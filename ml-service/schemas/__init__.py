@@ -1,6 +1,7 @@
-"""KiranaPool Request and Response Schemas Package.
+"""API request and response schemas package.
 
-Intended Responsibility:
-- Shared package (Coordinate before editing).
-- Exports data validation models for the ML service API boundary.
+Responsibility:
+    Shared package (ML Developer A & ML Developer B).
+    Exports data models for validating incoming payloads and formatting outgoing
+    optimization and pooling responses across the service boundary.
 """

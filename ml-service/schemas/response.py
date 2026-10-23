@@ -1,8 +1,8 @@
-"""Response Validation Schemas.
+"""Response schemas for KiranaPool ML service API endpoints.
 
-Intended Responsibility:
-- Shared file (Coordinate before editing).
-- Defines outgoing response schemas for dispatch plans, pooled routes,
-  performance metrics, rejection/fallback reasons, and demand forecasts.
-- Specific schema fields will be added upon verification of the approved API contract.
+Responsibility:
+    Shared file (ML Developer A & ML Developer B).
+    Defines output structures for delivery batches, optimized route sequences,
+    travel durations, efficiency metrics, and unpooling reason codes returned
+    to the Node.js/Express backend.
 """

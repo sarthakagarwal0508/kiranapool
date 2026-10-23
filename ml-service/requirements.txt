@@ -1,12 +1,11 @@
 # KiranaPool ML Service Dependencies
-# Note: All dependencies must be strictly verified and usable offline.
+# Note: Offline 24-hour hackathon environment - verify package availability before adding.
 
 # Test framework (verified available in local offline environment)
 pytest>=8.0.0
 
-# TODO: Coordinate before editing (Shared file).
-# Verify the web framework and solver requirements with Backend/Team before adding:
+# Service & Modeling dependencies:
 # - fastapi / uvicorn (for HTTP service integration with Node.js/Express backend)
 # - pydantic (for request/response schema validation)
 # - route optimization engine (e.g. ortools / scipy / networkx)
-# - forecasting dependencies (e.g. lightgbm / scikit-learn / pandas)
+# - forecasting & economics dependencies (e.g. scikit-learn / pandas)

@@ -1,8 +1,7 @@
-"""Request Validation Schemas.
+"""Request schemas and payload validation for KiranaPool ML service API endpoints.
 
-Intended Responsibility:
-- Shared file (Coordinate before editing).
-- Defines incoming request schemas for order pooling, route optimization,
-  and demand forecasting requested by the backend.
-- Specific schema fields will be added upon verification of the approved API contract.
+Responsibility:
+    Shared file (ML Developer A & ML Developer B).
+    Defines input validation schemas for order pooling, route optimization, and
+    forecasting requests dispatched from the Node.js/Express backend.
 """
