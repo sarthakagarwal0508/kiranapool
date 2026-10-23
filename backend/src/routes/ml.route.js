@@ -5,9 +5,7 @@ const {
   rawRoute,
   planRoute,
   solveRoute,
-  batchOrders,
-  estimateTravelTime,
-  calculateEconomics,
+  batchOrders,  estimateTravelTime,calculateEconomics,
 } = require("../controllers/ml.controller");
 
 const router = express.Router();

@@ -24,7 +24,6 @@ const proxyEndpoint = ({ path, method = "POST", timeoutMs, validate }) => async 
     });
   }
 };
-
 const mustHaveArray = (field) => (body) => Array.isArray(body?.[field]) ? null : `${field} must be an array`;
 const mustHaveObject = (body) => body && typeof body === "object" && !Array.isArray(body) ? null : "Request body must be a JSON object";
 
@@ -35,5 +34,4 @@ const solveRoute = proxyEndpoint({ path: "/routes/solve", validate: mustHaveArra
 const batchOrders = proxyEndpoint({ path: "/batch", validate: mustHaveArray("orders") });
 const estimateTravelTime = proxyEndpoint({ path: "/travel-time", validate: mustHaveObject });
 const calculateEconomics = proxyEndpoint({ path: "/economics/costs", validate: mustHaveObject });
-
 module.exports = { mlHealth, rawRoute, planRoute, solveRoute, batchOrders, estimateTravelTime, calculateEconomics };
