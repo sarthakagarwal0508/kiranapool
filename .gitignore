@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+.env
+.venv/
+env/
+venv/
+kiranapool/
+
+# Ignore heavy 47MB travel time matrices to prevent HTTP 408 timeout on push
+/data/travel_time_matrix.csv
+/ml-service/data/travel_time_matrix.csv

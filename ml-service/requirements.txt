@@ -1,0 +1,8 @@
+# KiranaPool ML Service
+#
+# Shared file (ML Developer A & ML Developer B): Coordinate before editing.
+# Note: Offline 24-hour hackathon environment - verify package availability before adding.
+
+# TODO: Confirm Python web framework (e.g., FastAPI / Flask) after verifying backend API contract.
+# TODO: Confirm optimization/routing solver library (e.g., OR-Tools / SciPy) available in offline environment.
+# TODO: Confirm test runner (e.g., pytest) availability in offline environment.
