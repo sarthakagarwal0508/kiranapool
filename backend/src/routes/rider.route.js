@@ -32,9 +32,9 @@ router.patch(
   updateMyRiderProfile
 );
 
-// Rider directory
-router.get("/", getRiders);
-router.get("/:id", getRiderById);
+// Only wholesalers need the rider directory for plan assignment.
+router.get("/", allowRoles("wholesaler"), getRiders);
+router.get("/:id", allowRoles("wholesaler"), getRiderById);
 
 // Create a profile only for the authenticated rider account
 router.post(

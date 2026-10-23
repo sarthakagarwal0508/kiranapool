@@ -7,6 +7,19 @@ const orderSchema = new mongoose.Schema(
       ref: "Shop",
       required: [true, "Shop is required"],
     },
+    // Audit which account entered the order (shopkeeper app vs wholesaler manual entry).
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true },
+    orderSource: { type: String, enum: ["shopkeeper", "wholesaler_manual", "legacy"], default: "shopkeeper", index: true },
+    // Synthetic-seed marker is only used by the local demo seed script.
+    demoSeed: { type: Boolean, default: false, index: true },
+    warehouse: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Warehouse",
+      default: null,
+      index: true,
+    },
+    deliverySlotStart: { type: Date, default: null, index: true },
+    deliverySlotEnd: { type: Date, default: null },
     customerName: {
       type: String,
       required: [true, "Customer name is required"],
@@ -81,5 +94,7 @@ const orderSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+orderSchema.index({ warehouse: 1, status: 1, deliverySlotStart: 1, deliverySlotEnd: 1 });
 
 module.exports = mongoose.model("Order", orderSchema);

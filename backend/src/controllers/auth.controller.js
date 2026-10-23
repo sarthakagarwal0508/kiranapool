@@ -37,12 +37,12 @@ const signup = async (req, res, next) => {
       typeof email !== "string" ||
       typeof password !== "string" ||
       password.length < 8 ||
-      !["shopkeeper", "rider"].includes(role)
+      !["shopkeeper", "wholesaler", "rider"].includes(role)
     ) {
       return res.status(400).json({
         success: false,
         message:
-          "Name, valid email, password (minimum 8 characters) and role (shopkeeper/rider) are required",
+          "Name, valid email, password (minimum 8 characters) and role (shopkeeper/wholesaler/rider) are required",
       });
     }
 
@@ -178,10 +178,10 @@ const googleAuth = async (req, res, next) => {
           });
         }
       } else {
-        if (!["shopkeeper", "rider"].includes(role)) {
+        if (!["shopkeeper", "wholesaler", "rider"].includes(role)) {
           return res.status(400).json({
             success: false,
-            message: "Choose role: shopkeeper or rider",
+            message: "Choose role: shopkeeper, wholesaler or rider",
           });
         }
 

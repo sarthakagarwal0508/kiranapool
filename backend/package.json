@@ -1,12 +1,13 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "KiranaPool API - auth, shop/rider/order workflows, delivery pooling and demand forecasting",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test",
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "seed:demo": "node src/seed/seedDemo.js"
   },
   "keywords": [],
   "author": "",

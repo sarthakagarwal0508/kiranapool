@@ -1,14 +1,38 @@
 const mongoose = require("mongoose");
 const Shop = require("../models/Shop");
+const Warehouse = require("../models/Warehouse");
+
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const wholesalerShopFilter = async (userId) => {
+  const warehouses = await Warehouse.find({ owner: userId, isActive: true }).select("serviceAreas").lean();
+  if (!warehouses.length) return { isActive: true, _id: { $exists: false } };
+  // A warehouse with no area restriction is considered able to serve any active shop.
+  if (warehouses.some((warehouse) => !(warehouse.serviceAreas || []).length)) return { isActive: true };
+  const areas = [...new Set(warehouses.flatMap((warehouse) => warehouse.serviceAreas || []).map((area) => String(area).trim()).filter(Boolean))];
+  if (!areas.length) return { isActive: true, _id: { $exists: false } };
+  return {
+    isActive: true,
+    $or: [
+      ...areas.map((area) => ({ area: { $regex: `^${escapeRegex(area)}$`, $options: "i" } })),
+      ...areas.map((area) => ({ address: { $regex: escapeRegex(area), $options: "i" } })),
+    ],
+  };
+};
 
 const getShops = async (req, res, next) => {
   try {
-    // Shopkeepers see only their own shops.
+    // Shopkeepers see their own shops. Wholesalers can select active kirana
+    // shops served by their warehouse areas even before the first supply order.
     // Riders can see active shops for delivery context.
-    const filter =
-      req.user.role === "shopkeeper"
-        ? { owner: req.user.id }
-        : { isActive: true };
+    let filter;
+    if (req.user.role === "shopkeeper") {
+      filter = { owner: req.user.id };
+    } else if (req.user.role === "wholesaler") {
+      filter = await wholesalerShopFilter(req.user.id);
+    } else {
+      filter = { isActive: true };
+    }
 
     const shops = await Shop.find(filter).sort({ createdAt: -1 });
 
@@ -33,10 +57,12 @@ const getShopById = async (req, res, next) => {
       });
     }
 
-    const filter = { _id: id };
+    let filter = { _id: id };
 
     if (req.user.role === "shopkeeper") {
       filter.owner = req.user.id;
+    } else if (req.user.role === "wholesaler") {
+      filter = { _id: id, ...(await wholesalerShopFilter(req.user.id)) };
     } else {
       filter.isActive = true;
     }
@@ -61,7 +87,7 @@ const getShopById = async (req, res, next) => {
 
 const createShop = async (req, res, next) => {
   try {
-    const { name, ownerName, phone, address, location } = req.body;
+    const { name, ownerName, phone, address, location, area } = req.body;
 
     if (
       typeof name !== "string" ||
@@ -90,6 +116,7 @@ const createShop = async (req, res, next) => {
       ownerName,
       phone,
       address: address.trim(),
+      area: typeof area === "string" ? area.trim() : "",
       location,
     });
 
@@ -119,6 +146,7 @@ const updateShop = async (req, res, next) => {
       "ownerName",
       "phone",
       "address",
+      "area",
       "location",
       "isActive",
     ];
@@ -145,6 +173,10 @@ const updateShop = async (req, res, next) => {
         success: false,
         message: "Shop name cannot be empty",
       });
+    }
+
+    if ("area" in updates && typeof updates.area !== "string") {
+      return res.status(400).json({ success: false, message: "Area must be a string" });
     }
 
     if ("address" in updates && (
@@ -189,6 +221,9 @@ const updateShop = async (req, res, next) => {
 
     if (typeof updates.address === "string") {
       updates.address = updates.address.trim();
+    }
+    if (typeof updates.area === "string") {
+      updates.area = updates.area.trim();
     }
 
     const shop = await Shop.findOneAndUpdate(

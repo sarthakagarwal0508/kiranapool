@@ -1,6 +1,7 @@
 
 const mongoose = require("mongoose");
 const Rider = require("../models/Rider");
+const Plan = require("../models/Plan");
 
 // GET /api/riders
 // List all riders (authenticated users only)
@@ -226,6 +227,19 @@ const updateMyRiderProfile = async (req, res, next) => {
 
     if (updates.name !== undefined) {
       updates.name = updates.name.trim();
+    }
+
+    // Availability is managed by the delivery workflow; a rider cannot mark
+    // themselves available while a delivery plan is still active.
+    if (updates.isAvailable === true) {
+      const currentRider = await Rider.findOne({ user: req.user.id }).select("_id");
+      if (!currentRider) {
+        return res.status(404).json({ success: false, message: "Rider profile not found. Create your profile first." });
+      }
+      const activePlan = await Plan.exists({ rider: currentRider._id, status: "planned" });
+      if (activePlan) {
+        return res.status(409).json({ success: false, message: "You cannot mark yourself available while a delivery plan is active" });
+      }
     }
 
     const rider = await Rider.findOneAndUpdate(

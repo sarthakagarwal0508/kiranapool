@@ -7,6 +7,21 @@ const planSchema = new mongoose.Schema(
       default: "Delivery Plan",
       trim: true,
     },
+    warehouse: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Warehouse",
+      default: null,
+      index: true,
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true,
+    },
+    deliverySlotStart: { type: Date, default: null },
+    deliverySlotEnd: { type: Date, default: null },
+    route: { type: [mongoose.Schema.Types.Mixed], default: [] },
     orders: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -36,7 +51,7 @@ const planSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["draft", "planned", "completed", "failed"],
+      enum: ["draft", "planned", "completed", "failed", "cancelled"],
       default: "draft",
     },
   },
@@ -44,5 +59,7 @@ const planSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+planSchema.index({ warehouse: 1, status: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Plan", planSchema);

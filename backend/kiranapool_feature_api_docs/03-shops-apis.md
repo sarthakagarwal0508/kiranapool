@@ -9,6 +9,7 @@ All routes require JWT authentication.
 Lists shops visible to the authenticated user.
 - Shopkeeper: own shops
 - Rider: active shops
+- Wholesaler: active shops in their warehouse service areas (or all active shops if no service areas are configured), including shops with no prior orders
 - Success: `200 OK`; returns `success`, `count`, `data`
 
 ## `GET /shops/:id`
@@ -26,6 +27,7 @@ Creates a shop. **Shopkeeper only.**
   "ownerName": "Aman Sharma",
   "phone": "9876543210",
   "address": "Mansarovar, Jaipur",
+  "area": "Mansarovar",
   "location": {
     "lat": 26.854,
     "lng": 75.764
@@ -43,6 +45,7 @@ Allowed fields:
 - `ownerName`
 - `phone`
 - `address`
+- `area` (used for area-wise forecasting)
 - `location`
 - `isActive`
 
@@ -53,3 +56,6 @@ Allowed fields:
 Deletes a shop. **Owning shopkeeper only.**
 - Only the authenticated owner can delete their shop.
 - Success status/body depends on the implemented controller response.
+
+
+Role access note: shopkeepers see their own shop records; wholesalers see active shops served by their active warehouse service areas (or all active shops when no service areas are configured), so they can register the first manual order; riders can view active shop context for assigned delivery work.

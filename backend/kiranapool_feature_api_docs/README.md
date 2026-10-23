@@ -1,31 +1,21 @@
-# KiranaPool — Feature-wise API Documentation
+# KiranaPool — Backend API Documentation
 
 Base URL: `http://localhost:5000/api`
 
-These files split the APIs implemented across the first five phases into separate feature documents.
+Roles: `shopkeeper` (kirana retailer), `wholesaler` (supplier/warehouse owner), `rider` (delivery rider). All protected routes require `Authorization: Bearer <JWT_TOKEN>`.
 
-## Files
-- `01-health-api.md` — Health check
-- `02-auth-apis.md` — Signup, login, Google auth, current user
-- `03-shops-apis.md` — Shop CRUD
-- `04-riders-apis.md` — Rider profile and directory
-- `05-orders-apis.md` — Order creation, listing, details, status
-- `API-INVENTORY.md` — Complete endpoint checklist and count
+## Docs
+- `01-health-api.md` — health check
+- `02-auth-apis.md` — signup, login, Google auth and current user
+- `03-shops-apis.md` — kirana shop CRUD
+- `04-riders-apis.md` — rider profile and directory
+- `05-orders-apis.md` — legacy orders + wholesaler supply orders
+- `PHASE6_7_API_GUIDE.md` — warehouses, delivery pooling, rider assignment, route metrics and forecasting
+- `ML_INTEGRATION.md` — FastAPI request/response contract and local fallback
+- `API-INVENTORY.md` — endpoint list
+- `SCHEMAS.md` — MongoDB schemas and relationships
 
-## Current endpoint inventory
-**19 endpoints** across five feature groups:
-- Health: 1
-- Authentication: 4
-- Shops: 5
-- Riders: 5
-- Orders: 4
+## Status
+Phase 1–5 endpoints are retained, with backward-compatible legacy order support. Phase 6 adds wholesaler-owned warehouses, compatibility-based pooling, route estimates, plan creation and rider assignment. Phase 7 adds shop/area and time-slot forecasts, cost/savings metrics, a demo data seed, and optional FastAPI integration with a local fallback.
 
-All protected endpoints use:
-`Authorization: Bearer <JWT_TOKEN>`
-
-Roles implemented: `shopkeeper`, `rider`.
-
-Notes:
-- This reflects the implementation described in the project conversation. Google OAuth endpoint exists, but a real Google ID-token sign-in flow still needs live verification.
-- Delivery planning/pooling endpoints are not included because Phase 6 has not started.
-- Replace example MongoDB ObjectIds and credentials with your own test data.
+Run `npm test` for the included pure-service tests. Run `npm run seed:demo` only against a demo database to create reproducible sample data. Demo logins and password are documented in `PHASE6_7_API_GUIDE.md`.

@@ -18,7 +18,7 @@ This document describes the User, Shop, Rider, Order, Plan and Forecast models.
 | `email` | String | Required, unique, lowercase, trimmed |
 | `passwordHash` | String | Hidden by default from queries; used for local authentication |
 | `googleId` | String | Optional, sparse unique |
-| `role` | String | Required; `shopkeeper` or `rider` |
+| `role` | String | Required; `shopkeeper`, `wholesaler` or `rider` |
 | `createdAt` | Date | Automatic timestamp |
 | `updatedAt` | Date | Automatic timestamp |
 
@@ -49,6 +49,7 @@ Passwords must be stored as a secure hash, never as plaintext. `passwordHash` is
 | `address` | String | Required, trimmed |
 | `location.lat` | Number | Required; -90 to 90 |
 | `location.lng` | Number | Required; -180 to 180 |
+| `area` | String | Optional; used for area-wise demand forecasting |
 | `isActive` | Boolean | Default `true` |
 | `createdAt` | Date | Automatic timestamp |
 | `updatedAt` | Date | Automatic timestamp |
@@ -117,8 +118,13 @@ Each rider account can have one Rider profile. Rider profile creation gets the `
 | Field | Type | Rules |
 |---|---|---|
 | `shop` | ObjectId → Shop | Required |
+| `warehouse` | ObjectId → Warehouse | Optional for legacy orders; required for Phase 6 pooling |
+| `createdBy` | ObjectId → User | Account that entered the order |
+| `orderSource` | String | `shopkeeper`, `wholesaler_manual` or `legacy` |
+| `deliverySlotStart` / `deliverySlotEnd` | Date | Optional for legacy; required by controller for supply orders |
+| `demoSeed` | Boolean | Default `false`; synthetic seed-data marker |
 | `customerName` | String | Required |
-| `customerPhone` | String | Required |
+| `customerPhone` | String | Optional in schema; controller requires it for legacy orders and defaults supply orders from the shop profile |
 | `deliveryAddress` | String | Required |
 | `location.lat` | Number | Delivery latitude |
 | `location.lng` | Number | Delivery longitude |
@@ -194,22 +200,26 @@ The rider must be assigned to the order before updating delivery status.
 
 **Model:** `Plan`
 
-The model is ready; delivery planning APIs and pooling logic are part of the next phase.
+The model backs Phase 6 route preview, plan creation, automatic pooling, rider assignment and delivery lifecycle APIs.
 
 | Field | Type | Rules |
 |---|---|---|
 | `name` | String | Default `Delivery Plan` |
+| `warehouse` | ObjectId → Warehouse | Warehouse that owns this route |
+| `createdBy` | ObjectId → User | Wholesaler who generated the plan |
+| `deliverySlotStart` / `deliverySlotEnd` | Date | Shared intersection of order delivery windows |
+| `route` | Array<Mixed> | Ordered delivery stops |
 | `orders` | Array<ObjectId → Order> | References orders in the plan |
 | `rider` | ObjectId → Rider | Optional rider reference |
 | `pooled` | Mixed/Object | Default empty object |
 | `solo` | Mixed/Object | Default empty object |
 | `savings` | Mixed/Object | Default empty object |
 | `meta` | Mixed/Object | Default empty object |
-| `status` | String | `draft`, `planned`, `completed`, `failed`; default `draft` |
+| `status` | String | `draft`, `planned`, `completed`, `failed`, `cancelled`; default `draft` |
 | `createdAt` | Date | Automatic timestamp |
 | `updatedAt` | Date | Automatic timestamp |
 
-The exact structure of `pooled`, `solo`, `savings` and `meta` will be defined when the delivery-planning business logic is implemented.
+`pooled` and `solo` store distance/cost/time estimates; `savings` stores total and per-shop savings; `meta` stores the estimates and algorithm assumptions.
 
 ---
 
@@ -217,12 +227,19 @@ The exact structure of `pooled`, `solo`, `savings` and `meta` will be defined wh
 
 **Model:** `Forecast`
 
-The model is ready; forecasting API integration remains pending.
+The model backs Phase 7 shop/area and time-slot forecasts, actual-demand recording, and forecast summaries.
 
 | Field | Type | Rules |
 |---|---|---|
 | `forecastDate` | Date | Required |
-| `shop` | ObjectId → Shop | Optional, default `null` |
+| `wholesaler` | ObjectId → User | Supplier who generated the forecast |
+| `scope` | String | `shop` or `area` |
+| `shop` | ObjectId → Shop | Optional, for shop-scope forecast |
+| `area` | String | Area/locality grouping |
+| `timeSlot` | String | `morning`, `afternoon`, `evening` |
+| `slotStart` / `slotEnd` | Date | Forecast window boundaries |
+| `confidence` | Number | Optional, 0–1 |
+| `modelSource` | String | FastAPI model or local fallback |
 | `predictedOrders` | Number | Required, minimum 0 |
 | `actualOrders` | Number | Optional, default `null`, minimum 0 |
 | `meta` | Mixed/Object | Default empty object |
@@ -231,26 +248,48 @@ The model is ready; forecasting API integration remains pending.
 
 ---
 
-## 7. Entity Relationships
+## 7. Warehouse Schema
+
+**Model:** `Warehouse`
+
+| Field | Type | Rules |
+|---|---|---|
+| `owner` | ObjectId → User | Required; role is `wholesaler` in API workflow |
+| `name` | String | Required, trimmed |
+| `supplierName` | String | Optional; defaults from the wholesaler account at create time |
+| `address` | String | Required |
+| `location.lat` / `location.lng` | Number | Required, geographic range checked |
+| `serviceAreas` | Array<String> | Optional locality labels |
+| `isActive` | Boolean | Default `true` |
+| timestamps | Date | Automatic |
+
+A wholesaler may own multiple warehouses. A pooled plan is always tied to exactly one warehouse; orders from different warehouses are never combined.
+
+## 8. Entity Relationships
 
 ```text
 User
  ├── Shopkeeper account → owns many Shops
+ ├── Wholesaler account → owns many Warehouses
  └── Rider account → one Rider profile
 
 Shop
  └── many Orders
 
+Warehouse
+ └── belongs to one Wholesaler and many Orders / Plans
+
 Order
  ├── belongs to one Shop
+ ├── optionally belongs to one Warehouse for B2B replenishment
  ├── optionally assigned to one Rider
  └── optionally linked to one Plan
 
 Plan
- └── contains multiple Orders
+ └── contains orders for one Warehouse and one shared time window
 ```
 
-## 8. Current Module Status
+## 9. Current Module Status
 
 | Module | Status |
 |---|---|
@@ -258,7 +297,7 @@ Plan
 | Shop model and CRUD APIs | Implemented and tested |
 | Rider model and profile APIs | Implemented and tested |
 | Order model and APIs | Implemented and tested |
-| Plan model | Created; planning logic pending |
-| Forecast model | Created; forecast API pending |
+| Plan model and APIs | Implemented; pooled route estimates and rider assignment |
+| Forecast model and APIs | Implemented; FastAPI optional, baseline fallback available |
 
 These schema descriptions reflect the model definitions and validation behavior documented during the current implementation. Future changes to model code should be reflected here as well.

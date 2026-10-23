@@ -15,7 +15,7 @@ Creates a local account.
   "role": "shopkeeper"
 }
 ```
-- `role`: `shopkeeper` or `rider`
+- `role`: `shopkeeper`, `wholesaler` or `rider`
 - Password minimum length: 8 characters
 - Success: `201 Created`; returns token and user
 - Common errors: `400` validation, `409` duplicate email
@@ -38,13 +38,13 @@ Verifies a Google Sign-In ID token and returns a KiranaPool JWT.
 
 - Requires `GOOGLE_CLIENT_ID` in environment
 - Request token property must match the current controller implementation.
-- For a new account, role must be `shopkeeper` or `rider`; an existing account keeps its existing role.
+- For a new account, role must be `shopkeeper`, `wholesaler` or `rider`; an existing account keeps its existing role.
 - Real Google ID-token flow: live verification pending.
 
-Example shape (confirm exact token field name against controller):
+Example request (the controller expects `idToken`):
 ```json
 {
-  "credential": "<GOOGLE_ID_TOKEN>",
+  "idToken": "<GOOGLE_ID_TOKEN>",
   "role": "shopkeeper"
 }
 ```

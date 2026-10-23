@@ -6,6 +6,10 @@ const shopRoutes = require("./routes/shop.route");
 const authRoutes = require("./routes/auth.route");
 const riderRoutes = require("./routes/rider.route");
 const orderRoutes = require("./routes/order.route");
+const warehouseRoutes = require("./routes/warehouse.route");
+const planRoutes = require("./routes/plan.route");
+const legacyPlanRoutes = require("./routes/plan.legacy.route");
+const forecastRoutes = require("./routes/forecast.route");
 
 const app = express();
 
@@ -17,6 +21,10 @@ app.use("/api/shops", shopRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/riders", riderRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/warehouses", warehouseRoutes);
+app.use("/api/plans", planRoutes);
+app.use("/api/plan", legacyPlanRoutes);
+app.use("/api/forecasts", forecastRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

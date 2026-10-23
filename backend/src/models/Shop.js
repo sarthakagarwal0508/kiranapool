@@ -42,6 +42,12 @@ const shopSchema = new mongoose.Schema(
         max: 180,
       },
     },
+    area: {
+      type: String,
+      trim: true,
+      default: "",
+      index: true,
+    },
     isActive: {
       type: Boolean,
       default: true,

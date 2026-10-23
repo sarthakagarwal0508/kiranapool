@@ -1,0 +1,962 @@
+{
+  "info": {
+    "_postman_id": "b8c8045c-24c5-4ee4-92ae-9e62e870d4e8",
+    "name": "KiranaPool Phase 6-7 Backend APIs",
+    "description": "Run seed:demo first. Logins save role tokens; use requests in order. The collection sets tomorrow 10:00\u201312:00 IST as a reusable delivery slot. Base API: http://localhost:5000/api",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const offset = 330 * 60 * 1000;",
+          "const indiaNow = new Date(Date.now() + offset);",
+          "const tomorrowLocalMidnight = Date.UTC(indiaNow.getUTCFullYear(), indiaNow.getUTCMonth(), indiaNow.getUTCDate() + 1);",
+          "const start = new Date(tomorrowLocalMidnight + 10 * 60 * 60 * 1000 - offset);",
+          "const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);",
+          "pm.collectionVariables.set(\"slotStart\", start.toISOString());",
+          "pm.collectionVariables.set(\"slotEnd\", end.toISOString());"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api"
+    },
+    {
+      "key": "demoPassword",
+      "value": "KiranaDemo@123"
+    },
+    {
+      "key": "wholesalerEmail",
+      "value": "demo.wholesaler@kiranapool.test"
+    },
+    {
+      "key": "shopkeeperEmail",
+      "value": "demo.shopkeeper1@kiranapool.test"
+    },
+    {
+      "key": "riderEmail",
+      "value": "demo.rider@kiranapool.test"
+    },
+    {
+      "key": "wholesalerToken",
+      "value": ""
+    },
+    {
+      "key": "shopkeeperToken",
+      "value": ""
+    },
+    {
+      "key": "riderToken",
+      "value": ""
+    },
+    {
+      "key": "warehouseId",
+      "value": ""
+    },
+    {
+      "key": "shopId",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    },
+    {
+      "key": "manualOrderId",
+      "value": ""
+    },
+    {
+      "key": "planId",
+      "value": ""
+    },
+    {
+      "key": "riderProfileId",
+      "value": ""
+    },
+    {
+      "key": "forecastId",
+      "value": ""
+    },
+    {
+      "key": "slotStart",
+      "value": ""
+    },
+    {
+      "key": "slotEnd",
+      "value": ""
+    },
+    {
+      "key": "wholesalerShopId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1 - Auth and setup",
+      "item": [
+        {
+          "name": "Login wholesaler",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Run after npm run seed:demo.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{wholesalerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "pm.test(\"wholesaler login succeeded\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"wholesalerToken\", data.token);",
+                  "pm.test(\"account role is wholesaler\", () => pm.expect(data.user.role).to.eql(\"wholesaler\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login shopkeeper",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{shopkeeperEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "pm.test(\"shopkeeper login succeeded\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"shopkeeperToken\", data.token);",
+                  "pm.test(\"account role is shopkeeper\", () => pm.expect(data.user.role).to.eql(\"shopkeeper\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login rider",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{riderEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "pm.test(\"rider login succeeded\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"riderToken\", data.token);",
+                  "pm.test(\"account role is rider\", () => pm.expect(data.user.role).to.eql(\"rider\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get warehouses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/warehouses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "warehouses"
+              ]
+            },
+            "description": "Saves first active warehouse ID for subsequent requests.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{wholesalerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "pm.test(\"warehouses fetched\", () => pm.response.to.have.status(200));",
+                  "if (data.data && data.data.length) pm.collectionVariables.set(\"warehouseId\", data.data[0]._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create warehouse (optional)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/warehouses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "warehouses"
+              ]
+            },
+            "description": "Optional: run only if you need a fresh warehouse; it sets warehouseId to the new record.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{wholesalerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Warehouse\",\n  \"supplierName\": \"Postman Demo Supplier\",\n  \"address\": \"Sitapura Industrial Area, Jaipur\",\n  \"location\": {\n    \"lat\": 26.785,\n    \"lng\": 75.85\n  },\n  \"serviceAreas\": [\n    \"Mansarovar\",\n    \"Malviya Nagar\",\n    \"Jagatpura\",\n    \"Sanganer\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "pm.test(\"warehouse created\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"warehouseId\", data.data._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Wholesaler lists service-area kirana shops",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/shops",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shops"
+              ]
+            },
+            "description": "Saves first shop ID. Demo seed creates one shop for this account.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{wholesalerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "pm.test(\"service-area shops fetched\", () => pm.response.to.have.status(200));",
+                  "if (data.data && data.data.length) pm.collectionVariables.set(\"wholesalerShopId\", data.data[0]._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Shopkeeper lists own kirana shop",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{shopkeeperToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/shops",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shops"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "pm.test(\"shopkeeper own shop fetched\", () => pm.response.to.have.status(200));",
+                  "if (data.data && data.data.length) pm.collectionVariables.set(\"shopId\", data.data[0]._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get rider profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/riders/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "riders",
+                "me"
+              ]
+            },
+            "description": "Saves the Rider profile _id (not the User _id).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{riderToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "pm.test(\"rider profile fetched\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"riderProfileId\", data.data._id);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2 - Supply orders and pooling",
+      "item": [
+        {
+          "name": "Wholesaler records manual order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/manual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "manual"
+              ]
+            },
+            "description": "Simulates an order received offline/by phone. Requires a registered shop.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{wholesalerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shop\": \"{{wholesalerShopId}}\",\n  \"warehouse\": \"{{warehouseId}}\",\n  \"deliverySlotStart\": \"{{slotStart}}\",\n  \"deliverySlotEnd\": \"{{slotEnd}}\",\n  \"items\": [\n    {\n      \"name\": \"Rice 25kg\",\n      \"quantity\": 2,\n      \"price\": 1250\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "pm.test(\"manual order recorded\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"manualOrderId\", data.data._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Shopkeeper places supply order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{shopkeeperToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shop\": \"{{shopId}}\",\n  \"warehouse\": \"{{warehouseId}}\",\n  \"deliverySlotStart\": \"{{slotStart}}\",\n  \"deliverySlotEnd\": \"{{slotEnd}}\",\n  \"items\": [\n    {\n      \"name\": \"Cooking Oil 5L\",\n      \"quantity\": 2,\n      \"price\": 700\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "pm.test(\"shopkeeper supply order created\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"orderId\", data.data._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preview compatible groups",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/plans/preview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "plans",
+                "preview"
+              ]
+            },
+            "description": "Returns candidate groups and their route/cost preview; does not change order status.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{wholesalerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"warehouseId\": \"{{warehouseId}}\",\n  \"slotStart\": \"{{slotStart}}\",\n  \"slotEnd\": \"{{slotEnd}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Auto-pool pending orders",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/plans/auto-pool",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "plans",
+                "auto-pool"
+              ]
+            },
+            "description": "Groups pending orders for this warehouse into routes. Seed data includes a shared upcoming time slot.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{wholesalerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"warehouseId\": \"{{warehouseId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get latest plan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/plans/latest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "plans",
+                "latest"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{wholesalerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "pm.test(\"latest plan fetched\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"planId\", data.data._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Assign rider",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/plans/{{planId}}/assign-rider",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "plans",
+                "{{planId}}",
+                "assign-rider"
+              ]
+            },
+            "description": "Assigns an available rider. If no rider is available, ensure the demo rider profile is available first.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{wholesalerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"riderId\": \"{{riderProfileId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get rider assigned orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders?status=planned",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders?status=planned"
+              ]
+            },
+            "description": "After assigning the rider, this should show planned orders assigned to the rider.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{riderToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Legacy singular plan URL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/plan/latest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "plan",
+                "latest"
+              ]
+            },
+            "description": "Backward-compatible alias for the original API note.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{wholesalerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 - Demand forecasting",
+      "item": [
+        {
+          "name": "Generate shop and area forecasts",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/forecasts/run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "forecasts",
+                "run"
+              ]
+            },
+            "description": "Calls configured FastAPI /forecast service; local historical baseline is used if it is not available.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{wholesalerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"horizonDays\": 7,\n  \"groupBy\": \"both\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "pm.test(\"forecast generation completed\", () => pm.response.to.have.status(200));",
+                  "if (data.data && data.data.length) pm.collectionVariables.set(\"forecastId\", data.data[0]._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List my forecasts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/forecasts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "forecasts"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{wholesalerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Forecast summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/forecasts/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "forecasts",
+                "summary"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{wholesalerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Record actual orders (optional)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/forecasts/{{forecastId}}/actual",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "forecasts",
+                "{{forecastId}}",
+                "actual"
+              ]
+            },
+            "description": "Optional model evaluation step; run after forecastId has been saved from Generate forecasts.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{wholesalerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actualOrders\": 8\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
