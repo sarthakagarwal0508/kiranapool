@@ -94,7 +94,7 @@ useEffect(() => {
 
     <section className="panel"><div className="panel-heading"><div><div className="eyebrow">FORECAST CONFIGURATION</div><h2>Generate demand forecast</h2></div><span className="soft-tag">FastAPI optional</span></div>
       <div style={{display:"flex",gap:14,flexWrap:"wrap",alignItems:"end"}}><label>Forecast horizon (days)<select value={horizonDays} onChange={(e) => setHorizonDays(e.target.value)}>{[1,3,7,14,30].map((n) => <option key={n} value={n}>{n} days</option>)}</select></label><label>Forecast breakdown<select value={groupBy} onChange={(e) => setGroupBy(e.target.value)}><option value="both">Shop + area</option><option value="shop">Shop-wise</option><option value="area">Area-wise</option></select></label><button className="button primary" type="button" onClick={runForecast} disabled={running || loading}>{running ? "Generating…" : "Generate forecast"}</button><button className="button" type="button" onClick={load}>Refresh</button></div>
-      <p className="page-subtitle">Forecasts use recorded delivery-slot history. If ML_SERVICE_URL is configured, the backend calls FastAPI; otherwise its configured local fallback is used.</p>
+      <p className="page-subtitle"></p>
     </section>
     <section className="stats-grid">
       <article className="stat-card"><div className="stat-top"><span className="stat-label">Forecast rows</span><span className="stat-icon violet">▥</span></div><div className="stat-value">{summary?.count ?? forecasts.length}</div><div className="stat-note">Stored predictions</div></article>
