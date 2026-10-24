@@ -175,11 +175,52 @@ export const plansApi = {
 };
 
 export const forecastsApi = {
-    getAll: (params = {}) => {
-        const query = new URLSearchParams(params).toString();
-        return apiRequest(`/forecasts${query ? `?${query}` : ""}`);
+        getAll: (params = {}) => {
+                const query = new URLSearchParams(params).toString();
+                return apiRequest(`/forecasts${query ? `?${query}` : ""}`);
     },
     getSummary: () => apiRequest("/forecasts/summary"),
     run: (payload = {}) => apiRequest("/forecasts/run", { method: "POST", body: JSON.stringify(payload) }),
     recordActual: (id, actualOrders) => apiRequest(`/forecasts/${id}/actual`, { method: "PATCH", body: JSON.stringify({ actualOrders }) }),
+};
+
+
+export const mlApi = {
+    getHealth: () => apiRequest("/ml/health"),
+
+    getTravelTime: (payload) =>
+        apiRequest("/ml/travel-time", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        }),
+
+    getEconomics: (payload) =>
+        apiRequest("/ml/economics/costs", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        }),
+
+    solveRoute: (payload) =>
+        apiRequest("/ml/route", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        }),
+
+    solveRoutes: (payload) =>
+        apiRequest("/ml/routes/solve", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        }),
+
+    planRoutes: (payload) =>
+        apiRequest("/ml/routes/plan", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        }),
+
+    batch: (payload) =>
+        apiRequest("/ml/batch", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        }),
 };

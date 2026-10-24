@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { forecastsApi } from "../services/api";
+import { forecastsApi, mlApi } from "../services/api";
 
 const money = (v) => typeof v === "number" ? `₹${v.toFixed(2)}` : "—";
 const listOf = (r) => Array.isArray(r?.data) ? r.data : Array.isArray(r) ? r : [];
@@ -13,6 +13,24 @@ export default function InsightsPage() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [mlHealth, setMlHealth] = useState(null);
+const [mlHealthError, setMlHealthError] = useState("");
+
+const checkMLHealth = useCallback(async () => {
+    setMlHealthError("");
+
+    try {
+        const result = await mlApi.getHealth();
+        setMlHealth(result);
+    } catch (err) {
+        setMlHealth(null);
+        setMlHealthError(err.message || "ML health check failed.");
+    }
+}, []);
+
+useEffect(() => {
+    checkMLHealth();
+}, [checkMLHealth]);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -43,6 +61,37 @@ export default function InsightsPage() {
   return <div className="page-stack">
     <section className="page-title-row"><div><div className="eyebrow">ANALYTICS / PERFORMANCE</div><h1>Insights & demand forecasts</h1><p className="page-subtitle">Compare pooled delivery costs and forecast shop-wise and area-wise demand by time slot.</p></div><span className="soft-tag">Phase 7 · ML</span></section>
     {error && <div className="alert error-alert" role="alert">{error}</div>}{notice && <div className="alert success-alert" role="status">{notice}</div>}
+    
+<section className="panel">
+  <div className="panel-heading">
+    <div>
+      <div className="eyebrow">ML SERVICE</div>
+      <h2>Integration status</h2>
+    </div>
+
+    <button
+      className="button"
+      type="button"
+      onClick={checkMLHealth}
+    >
+      Check again
+    </button>
+  </div>
+
+  {mlHealthError ? (
+    <p role="status">
+      ML health check failed: {mlHealthError}
+    </p>
+  ) : mlHealth === null ? (
+    <p>Checking ML service…</p>
+  ) : (
+    <p>
+      Backend ML health endpoint responded.
+      Check its response for the actual service status.
+    </p>
+  )}
+</section>
+
     <section className="panel"><div className="panel-heading"><div><div className="eyebrow">FORECAST CONFIGURATION</div><h2>Generate demand forecast</h2></div><span className="soft-tag">FastAPI optional</span></div>
       <div style={{display:"flex",gap:14,flexWrap:"wrap",alignItems:"end"}}><label>Forecast horizon (days)<select value={horizonDays} onChange={(e) => setHorizonDays(e.target.value)}>{[1,3,7,14,30].map((n) => <option key={n} value={n}>{n} days</option>)}</select></label><label>Forecast breakdown<select value={groupBy} onChange={(e) => setGroupBy(e.target.value)}><option value="both">Shop + area</option><option value="shop">Shop-wise</option><option value="area">Area-wise</option></select></label><button className="button primary" type="button" onClick={runForecast} disabled={running || loading}>{running ? "Generating…" : "Generate forecast"}</button><button className="button" type="button" onClick={load}>Refresh</button></div>
       <p className="page-subtitle">Forecasts use recorded delivery-slot history. If ML_SERVICE_URL is configured, the backend calls FastAPI; otherwise its configured local fallback is used.</p>
