@@ -80,7 +80,7 @@ export default function PlanPage() {
           const riderId = idOf(plan.rider);
           return <article key={planId || index} style={{border:"1px solid #e5e0ec",borderRadius:12,padding:16}}>
             <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><div><h3>{plan.name || `Delivery plan ${index + 1}`}</h3><p>{plan.warehouse?.name || "Warehouse"} · {plan.status || "planned"}</p></div><strong>{money(plan.savings?.amount)} estimated savings</strong></div>
-            <div className="plan-metrics"><div><span>Orders</span><strong>{orders.length}</strong></div><div><span>Solo cost</span><strong>{money(plan.solo?.totalCost)}</strong></div><div><span>Pooled cost</span><strong>{money(plan.pooled?.totalCost)}</strong></div></div>
+            <div className="plan-metrics"><div><span>Orders</span><strong>{orders.length}</strong></div><div><span>Solo cost</span><strong>{money(plan.solo?.totalCost)}</strong></div><div><span>Pooled cost</span><strong>{money(plan.pooled?.totalCost ?? plan.pooled?.cost)}</strong></div></div>
             <p><strong>Delivery slot:</strong> {plan.deliverySlotStart ? new Date(plan.deliverySlotStart).toLocaleString() : "—"} – {plan.deliverySlotEnd ? new Date(plan.deliverySlotEnd).toLocaleString() : "—"}</p>
             <p><strong>Stops:</strong> {stops.map((stop) => stop.label || stop.address || stop.type || "Stop").join(" → ") || "Route details unavailable"}</p>
             <p><strong>Rider:</strong> {plan.rider?.name || "Not assigned"}</p>
