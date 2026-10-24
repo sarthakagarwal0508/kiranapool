@@ -8,6 +8,7 @@ const {
   haversineKm,
   round,
 } = require("./planning.service");
+
 const toNumber = (value) => {
   if (value === null || value === undefined || (typeof value === "string" && value.trim() === "")) return null;
   const parsed = Number(value);
@@ -44,6 +45,7 @@ const toMlOrder = (order) => {
     area: String(order?.shop?.area || "").trim() || undefined,
   };
 };
+
 const getResponseBody = (value) => {
   if (!value || typeof value !== "object") return value;
   // Some implementations wrap response objects in {data: {...}}; unwrap once only.

@@ -5,6 +5,7 @@ const Shop = require("../models/Shop");
 const Rider = require("../models/Rider");
 const Warehouse = require("../models/Warehouse");
 const Plan = require("../models/Plan");
+const { checkWarehouseServiceability } = require("../services/warehouse-serviceability.service");
 
 const validStatuses = [
   "pending",
@@ -50,10 +51,15 @@ const createOrder = async (req, res, next) => {
       }
       warehouse = await Warehouse.findOne({ _id: selectedWarehouseId, isActive: true });
       if (!warehouse) return res.status(404).json({ success: false, message: "Warehouse not found or inactive" });
-      if (warehouse.serviceAreas?.length) {
-        const destinationArea = String(ownedShop.area || ownedShop.address.split(",")[0] || "").trim().toLowerCase();
-        const servesShop = warehouse.serviceAreas.some((area) => String(area).trim().toLowerCase() === destinationArea);
-        if (destinationArea && !servesShop) return res.status(400).json({ success: false, message: "Selected warehouse does not serve this shop's area" });
+      const serviceability = checkWarehouseServiceability({ warehouse, shop: ownedShop });
+      if (!serviceability.allowed) {
+        return res.status(400).json({
+          success: false,
+          message: serviceability.message,
+          code: "WAREHOUSE_OUT_OF_SERVICE_AREA",
+          distanceKm: serviceability.distanceKm,
+          maxDistanceKm: serviceability.maxDistanceKm,
+        });
       }
       if (!deliverySlotStart || !deliverySlotEnd || Number.isNaN(Date.parse(deliverySlotStart)) || Number.isNaN(Date.parse(deliverySlotEnd))) {
         return res.status(400).json({ success: false, message: "deliverySlotStart and deliverySlotEnd are required as valid dates for wholesaler orders" });
@@ -125,10 +131,15 @@ const createManualOrderForShop = async (req, res, next) => {
     ]);
     if (!shopDoc) return res.status(404).json({ success: false, message: "Active kirana shop not found" });
     if (!warehouse) return res.status(404).json({ success: false, message: "Active warehouse not found or not owned by this wholesaler" });
-    if (warehouse.serviceAreas?.length) {
-      const destinationArea = String(shopDoc.area || shopDoc.address.split(",")[0] || "").trim().toLowerCase();
-      const servesShop = warehouse.serviceAreas.some((area) => String(area).trim().toLowerCase() === destinationArea);
-      if (destinationArea && !servesShop) return res.status(400).json({ success: false, message: "Selected warehouse does not serve this shop's area" });
+    const serviceability = checkWarehouseServiceability({ warehouse, shop: shopDoc });
+    if (!serviceability.allowed) {
+      return res.status(400).json({
+        success: false,
+        message: serviceability.message,
+        code: "WAREHOUSE_OUT_OF_SERVICE_AREA",
+        distanceKm: serviceability.distanceKm,
+        maxDistanceKm: serviceability.maxDistanceKm,
+      });
     }
 
     if (!deliverySlotStart || !deliverySlotEnd || Number.isNaN(Date.parse(deliverySlotStart)) || Number.isNaN(Date.parse(deliverySlotEnd))) {
