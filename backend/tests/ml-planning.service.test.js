@@ -79,7 +79,7 @@ test("unmappable ML batch response safely uses local grouping when fallback is e
     const result = await batchOrdersWithMl(orders, getPlanningConfig(), async () => ({ status: 200, data: { batches: [{ orders: [{ order_id: "unknown" }] }] } }));
     assert.equal(result.integration.status, "local-fallback-error");
     assert.equal(result.groups.flat().length, 2);
-    assert.match(result.integration.warning, /could not be mapped/i);
+    assert.match(result.integration.warning, /local grouping used/i);
   });
 });
 

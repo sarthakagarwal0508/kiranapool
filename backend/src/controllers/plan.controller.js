@@ -10,6 +10,7 @@ const {
   round,
 } = require("../services/planning.service");
 const { calculateRouteWithMl, batchOrdersWithMl } = require("../services/ml-planning.service");
+const { parsePagination } = require("../utils/pagination");
 
 const warehouseOwnedBy = async (warehouseId, userId, activeOnly = true) => {
   if (!mongoose.isValidObjectId(warehouseId)) return null;
@@ -68,12 +69,13 @@ const savePlanForOrders = async ({ warehouse, orders, userId, name }) => {
     meta: { ...metrics, createdBy: userId, algorithm: routeFeasibility.mlIntegration?.routeSolver?.sequenceApplied ? "fastapi-ml-route-solver" : "local-nearest-neighbour-with-ml-economics-when-available", mlIntegration: routeFeasibility.mlIntegration },
     status: "planned",
   });
+  const planEventAt = new Date();
   const result = await Order.updateMany(
     { _id: { $in: orders.map((order) => order._id) }, status: "pending", plan: null },
-    { $set: { plan: plan._id, status: "planned" } }
+    { $set: { plan: plan._id, status: "planned" }, $push: { statusHistory: { status: "planned", changedBy: userId, actorRole: "wholesaler", changedAt: planEventAt, note: "Added to a delivery plan" } } }
   );
   if (result.modifiedCount !== orders.length) {
-    await Order.updateMany({ plan: plan._id }, { $set: { status: "pending", plan: null, rider: null } });
+    await Order.updateMany({ plan: plan._id }, { $set: { status: "pending", plan: null, rider: null }, $pull: { statusHistory: { changedAt: planEventAt } } });
     await Plan.findByIdAndDelete(plan._id);
     throw Object.assign(new Error("Some orders changed while the plan was being created. Refresh and retry."), { statusCode: 409 });
   }
@@ -102,7 +104,13 @@ const previewPlan = async (req, res, next) => {
       groups.push({ groupNumber: index + 1, orderCount: group.length, orders: group, route: routeResult.route, metrics: routeResult.metrics, mlIntegration: routeResult.mlIntegration });
     }
     return res.status(200).json({ success: true, count: orders.length, data: { warehouse, groups, groupCount: groups.length, mlBatching: batching.integration, message: "Pending orders grouped by ML when its response matches the schema and local constraints; otherwise local fallback is used. Preview does not change order status" } });
-  } catch (error) { if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message }); next(error); }
+  } catch (error) {
+    if (error.statusCode) {
+      const message = error.statusCode >= 500 ? "Route planning service failed. Retry or use the configured local fallback." : error.message;
+      return res.status(error.statusCode).json({ success: false, message });
+    }
+    next(error);
+  }
 };
 
 const createPlan = async (req, res, next) => {
@@ -114,7 +122,13 @@ const createPlan = async (req, res, next) => {
     const orders = await loadEligibleOrders({ warehouseId: warehouse._id, orderIds });
     const plan = await savePlanForOrders({ warehouse, orders, userId: req.user.id, name });
     return res.status(201).json({ success: true, message: "Delivery plan created; selected orders are now planned", data: await Plan.findById(plan._id).populate("warehouse").populate("orders") });
-  } catch (error) { if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message }); next(error); }
+  } catch (error) {
+    if (error.statusCode) {
+      const message = error.statusCode >= 500 ? "Route planning service failed. Retry or use the configured local fallback." : error.message;
+      return res.status(error.statusCode).json({ success: false, message });
+    }
+    next(error);
+  }
 };
 
 const autoPoolOrders = async (req, res, next) => {
@@ -187,9 +201,17 @@ const getPlans = async (req, res, next) => {
     } else {
       return res.status(403).json({ success: false, message: "Only wholesalers and assigned riders can view delivery plans" });
     }
-    if (req.query.status) filter.status = req.query.status;
-    const plans = await Plan.find(filter).populate("warehouse", "name address location").populate("rider", "name phone vehicleType").populate("orders", "shop status location deliverySlotStart deliverySlotEnd totalAmount").sort({ createdAt: -1 });
-    return res.status(200).json({ success: true, count: plans.length, data: plans });
+    if (req.query.status) {
+      if (!["draft", "planned", "completed", "failed", "cancelled"].includes(req.query.status)) return res.status(400).json({ success: false, message: "Invalid plan status filter" });
+      filter.status = req.query.status;
+    }
+    const pagination = parsePagination(req.query, { defaultLimit: 50, maxLimit: 100 });
+    if (pagination.error) return res.status(400).json({ success: false, message: pagination.error });
+    const [total, plans] = await Promise.all([
+      Plan.countDocuments(filter),
+      Plan.find(filter).populate("warehouse", "name address location").populate("rider", "name phone vehicleType").populate("orders", "shop status location deliverySlotStart deliverySlotEnd totalAmount").sort({ createdAt: -1 }).skip(pagination.skip).limit(pagination.limit),
+    ]);
+    return res.status(200).json({ success: true, count: plans.length, total, page: pagination.page, limit: pagination.limit, pages: Math.ceil(total / pagination.limit), data: plans });
   } catch (error) { next(error); }
 };
 
@@ -228,37 +250,133 @@ const getPlanById = async (req, res, next) => {
 const assignRider = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { riderId } = req.body;
-    if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(riderId)) return res.status(400).json({ success: false, message: "Valid plan ID and riderId are required" });
+    const { riderId } = req.body || {};
+    if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(riderId)) {
+      return res.status(400).json({ success: false, message: "Valid plan ID and riderId are required" });
+    }
+
     const plan = await Plan.findById(id).populate("warehouse", "owner");
-    if (!plan || !plan.warehouse || String(plan.warehouse.owner) !== req.user.id) return res.status(404).json({ success: false, message: "Plan not found or not owned by this wholesaler" });
+    if (!plan || !plan.warehouse || String(plan.warehouse.owner) !== req.user.id) {
+      return res.status(404).json({ success: false, message: "Plan not found or not owned by this wholesaler" });
+    }
     if (plan.status !== "planned") return res.status(400).json({ success: false, message: "Only planned deliveries can be assigned" });
-    const deliveryStarted = await Order.exists({ plan: plan._id, status: { $in: ["picked", "delivered"] } });
-    if (deliveryStarted) return res.status(409).json({ success: false, message: "Rider cannot be changed after delivery has started" });
+    if (await Order.exists({ plan: plan._id, status: { $in: ["picked", "delivered"] } })) {
+      return res.status(409).json({ success: false, message: "Rider cannot be changed after delivery has started" });
+    }
+
     const plannedOrderCount = await Order.countDocuments({ _id: { $in: plan.orders }, plan: plan._id, status: "planned" });
-    if (plannedOrderCount !== plan.orders.length) return res.status(409).json({ success: false, message: "Every order in the plan must still be planned before rider assignment" });
-    const rider = await Rider.findById(riderId);
-    if (!rider) return res.status(404).json({ success: false, message: "Rider profile not found" });
-    if (String(plan.rider || "") === String(rider._id)) {
-      const alreadyAssigned = await Order.countDocuments({ plan: plan._id, rider: rider._id, status: "planned" });
-      if (alreadyAssigned === plan.orders.length) {
-        return res.status(200).json({ success: true, message: "Rider is already assigned to this plan", data: await Plan.findById(plan._id).populate("warehouse", "name address").populate("rider", "name phone vehicleType") });
+    if (plannedOrderCount !== plan.orders.length) {
+      return res.status(409).json({ success: false, message: "Every order in the plan must still be planned before rider assignment" });
+    }
+
+    const rider = await Rider.findOne({ _id: riderId, $or: [{ managedBy: req.user.id }, { managedBy: null }] });
+    if (!rider) return res.status(404).json({ success: false, message: "Rider not found or already linked to another wholesaler" });
+
+    const previousRiderId = plan.rider ? String(plan.rider) : null;
+    if (previousRiderId === String(rider._id)) {
+      const assignedCount = await Order.countDocuments({ plan: plan._id, rider: rider._id, status: "planned" });
+      if (assignedCount === plan.orders.length) {
+        return res.status(200).json({
+          success: true,
+          message: "Rider is already assigned to this plan",
+          data: await Plan.findById(plan._id).populate("warehouse", "name address").populate("rider", "name phone vehicleType"),
+        });
       }
     }
-    if (!rider.isAvailable && String(plan.rider || "") !== String(rider._id)) return res.status(409).json({ success: false, message: "Rider is not available" });
-    const activePlan = await Plan.findOne({ rider: rider._id, status: "planned", _id: { $ne: plan._id } });
-    if (activePlan) return res.status(409).json({ success: false, message: "This rider already has an active delivery plan" });
-    if (plan.rider && String(plan.rider) !== String(rider._id)) await Rider.findByIdAndUpdate(plan.rider, { isAvailable: true });
-    plan.rider = rider._id;
-    await plan.save();
-    const updateResult = await Order.updateMany({ _id: { $in: plan.orders }, plan: plan._id, status: "planned" }, { $set: { rider: rider._id } });
-    if (updateResult.matchedCount !== plan.orders.length) {
-      return res.status(409).json({ success: false, message: "Plan orders changed while assigning the rider; refresh and retry" });
+
+    const wasAvailable = rider.isAvailable;
+    const previousManagedBy = rider.managedBy || null;
+    const isChangingRider = previousRiderId !== String(rider._id);
+    if (isChangingRider) {
+      const claimed = await Rider.findOneAndUpdate(
+        { _id: rider._id, isAvailable: true, $or: [{ managedBy: req.user.id }, { managedBy: null }] },
+        { $set: { isAvailable: false, managedBy: req.user.id } },
+        { new: true }
+      );
+      if (!claimed) return res.status(409).json({ success: false, message: "Rider is not available or has just been assigned elsewhere" });
+    } else if (rider.managedBy == null) {
+      await Rider.updateOne({ _id: rider._id, managedBy: null }, { $set: { managedBy: req.user.id } });
     }
-    rider.isAvailable = false;
-    await rider.save();
+
+    // Compare-and-set the plan so two concurrent assignment requests cannot silently replace each other.
+    const updatedPlan = await Plan.findOneAndUpdate(
+      { _id: plan._id, status: "planned", rider: previousRiderId || null },
+      { $set: { rider: rider._id } },
+      { new: true }
+    );
+    if (!updatedPlan) {
+      if (isChangingRider) await Rider.updateOne({ _id: rider._id, managedBy: req.user.id }, { $set: { isAvailable: wasAvailable, managedBy: previousManagedBy } });
+      return res.status(409).json({ success: false, message: "This plan was changed by another request. Refresh and retry." });
+    }
+
+    try {
+      const orderResult = await Order.updateMany(
+        { _id: { $in: plan.orders }, plan: plan._id, status: "planned" },
+        { $set: { rider: rider._id } }
+      );
+      if (orderResult.matchedCount !== plan.orders.length) {
+        await Order.updateMany({ plan: plan._id, rider: rider._id, status: "planned" }, { $set: { rider: previousRiderId } });
+        await Plan.updateOne({ _id: plan._id, status: "planned", rider: rider._id }, { $set: { rider: previousRiderId } });
+        if (isChangingRider) await Rider.updateOne({ _id: rider._id, managedBy: req.user.id }, { $set: { isAvailable: wasAvailable, managedBy: previousManagedBy } });
+        return res.status(409).json({ success: false, message: "Plan orders changed while assigning the rider; refresh and retry" });
+      }
+
+      if (previousRiderId && isChangingRider) {
+        const released = await Rider.updateOne({ _id: previousRiderId, $or: [{ managedBy: req.user.id }, { managedBy: null }] }, { $set: { isAvailable: true } });
+        if (released.matchedCount !== 1) throw Object.assign(new Error("Previously assigned rider profile no longer exists"), { statusCode: 409 });
+      }
+    } catch (error) {
+      await Order.updateMany({ plan: plan._id, rider: rider._id, status: "planned" }, { $set: { rider: previousRiderId } }).catch(() => {});
+      await Plan.updateOne({ _id: plan._id, status: "planned", rider: rider._id }, { $set: { rider: previousRiderId } }).catch(() => {});
+      if (isChangingRider) await Rider.updateOne({ _id: rider._id, managedBy: req.user.id }, { $set: { isAvailable: wasAvailable, managedBy: previousManagedBy } }).catch(() => {});
+      throw error;
+    }
+
     const populated = await Plan.findById(plan._id).populate("warehouse", "name address").populate("rider", "name phone vehicleType").populate("orders", "shop status location deliveryAddress");
     return res.status(200).json({ success: true, message: "Rider assigned to delivery plan", data: populated });
+  } catch (error) { next(error); }
+};
+
+const unassignRider = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid plan ID" });
+    const plan = await Plan.findById(id).populate("warehouse", "owner");
+    if (!plan || !plan.warehouse || String(plan.warehouse.owner) !== req.user.id) return res.status(404).json({ success: false, message: "Plan not found or not owned by this wholesaler" });
+    if (plan.status !== "planned" || !plan.rider) return res.status(400).json({ success: false, message: "This plan has no rider to unassign" });
+    if (await Order.exists({ plan: plan._id, status: { $in: ["picked", "delivered"] } })) return res.status(409).json({ success: false, message: "Rider cannot be unassigned after delivery has started" });
+
+    const previousRiderId = String(plan.rider);
+    const expectedCount = plan.orders.length;
+    const assignedCount = await Order.countDocuments({ _id: { $in: plan.orders }, plan: plan._id, rider: plan.rider, status: "planned" });
+    if (assignedCount !== expectedCount) return res.status(409).json({ success: false, message: "Plan order assignments are inconsistent. Refresh and retry." });
+
+    const ordersCleared = await Order.updateMany(
+      { _id: { $in: plan.orders }, plan: plan._id, rider: plan.rider, status: "planned" },
+      { $set: { rider: null } }
+    );
+    if (ordersCleared.matchedCount !== expectedCount) return res.status(409).json({ success: false, message: "Plan orders changed while unassigning the rider; refresh and retry" });
+
+    const planCleared = await Plan.findOneAndUpdate(
+      { _id: plan._id, status: "planned", rider: plan.rider },
+      { $set: { rider: null } },
+      { new: true }
+    );
+    if (!planCleared) {
+      await Order.updateMany({ _id: { $in: plan.orders }, plan: plan._id, rider: null, status: "planned" }, { $set: { rider: plan.rider } });
+      return res.status(409).json({ success: false, message: "This plan changed during unassignment. Refresh and retry." });
+    }
+
+    try {
+      const released = await Rider.updateOne({ _id: previousRiderId }, { $set: { isAvailable: true } });
+      if (released.matchedCount !== 1) throw Object.assign(new Error("Assigned rider profile no longer exists"), { statusCode: 409 });
+    } catch (error) {
+      await Plan.updateOne({ _id: plan._id, status: "planned", rider: null }, { $set: { rider: previousRiderId } }).catch(() => {});
+      await Order.updateMany({ _id: { $in: plan.orders }, plan: plan._id, rider: null, status: "planned" }, { $set: { rider: previousRiderId } }).catch(() => {});
+      throw error;
+    }
+
+    return res.status(200).json({ success: true, message: "Rider unassigned. Orders remain planned and can be assigned again.", data: await Plan.findById(plan._id).populate("warehouse", "name address").populate("orders", "shop status location") });
   } catch (error) { next(error); }
 };
 
@@ -269,15 +387,48 @@ const cancelPlan = async (req, res, next) => {
     const plan = await Plan.findById(id).populate("warehouse", "owner");
     if (!plan || !plan.warehouse || String(plan.warehouse.owner) !== req.user.id) return res.status(404).json({ success: false, message: "Plan not found or not owned by this wholesaler" });
     if (plan.status !== "planned") return res.status(400).json({ success: false, message: "Only planned deliveries can be cancelled" });
-    const picked = await Order.countDocuments({ plan: plan._id, status: "picked" });
-    const delivered = await Order.countDocuments({ plan: plan._id, status: "delivered" });
-    if (picked || delivered) return res.status(409).json({ success: false, message: "A plan cannot be cancelled after a rider has started delivering it" });
-    await Order.updateMany({ plan: plan._id, status: "planned" }, { $set: { status: "pending", plan: null, rider: null } });
-    if (plan.rider) await Rider.findByIdAndUpdate(plan.rider, { isAvailable: true });
-    plan.status = "cancelled";
-    await plan.save();
-    return res.status(200).json({ success: true, message: "Plan cancelled; orders returned to pending", data: plan });
+    if (await Order.exists({ plan: plan._id, status: { $in: ["picked", "delivered"] } })) return res.status(409).json({ success: false, message: "A plan cannot be cancelled after a rider has started delivering it" });
+
+    const expectedCount = plan.orders.length;
+    const plannedCount = await Order.countDocuments({ _id: { $in: plan.orders }, plan: plan._id, status: "planned" });
+    if (plannedCount !== expectedCount) return res.status(409).json({ success: false, message: "Plan orders are no longer all in the planned state. Refresh before cancelling." });
+
+    const cancelledAt = new Date();
+    const ordersCancelled = await Order.updateMany(
+      { _id: { $in: plan.orders }, plan: plan._id, status: "planned" },
+      { $set: { status: "pending", plan: null, rider: null }, $push: { statusHistory: { status: "pending", changedBy: req.user.id, actorRole: "wholesaler", changedAt: cancelledAt, note: "Delivery plan cancelled; order returned to queue" } } }
+    );
+    if (ordersCancelled.matchedCount !== expectedCount) {
+      await Order.updateMany({ _id: { $in: plan.orders }, status: "pending", plan: null }, { $set: { status: "planned", plan: plan._id, rider: plan.rider }, $pull: { statusHistory: { changedAt: cancelledAt } } });
+      return res.status(409).json({ success: false, message: "Plan orders changed while cancelling. Refresh and retry." });
+    }
+
+    const cancelledPlan = await Plan.findOneAndUpdate(
+      { _id: plan._id, status: "planned" },
+      { $set: { status: "cancelled" } },
+      { new: true }
+    );
+    if (!cancelledPlan) {
+      await Order.updateMany({ _id: { $in: plan.orders }, status: "pending", plan: null }, { $set: { status: "planned", plan: plan._id, rider: plan.rider }, $pull: { statusHistory: { changedAt: cancelledAt } } });
+      return res.status(409).json({ success: false, message: "This plan changed during cancellation. Refresh and retry." });
+    }
+
+    try {
+      if (plan.rider) {
+        const released = await Rider.updateOne({ _id: plan.rider }, { $set: { isAvailable: true } });
+        if (released.matchedCount !== 1) throw Object.assign(new Error("Assigned rider profile no longer exists"), { statusCode: 409 });
+      }
+    } catch (error) {
+      await Plan.updateOne({ _id: plan._id, status: "cancelled" }, { $set: { status: "planned" } }).catch(() => {});
+      await Order.updateMany(
+        { _id: { $in: plan.orders }, status: "pending", plan: null },
+        { $set: { status: "planned", plan: plan._id, rider: plan.rider }, $pull: { statusHistory: { changedAt: cancelledAt } } }
+      ).catch(() => {});
+      throw error;
+    }
+
+    return res.status(200).json({ success: true, message: "Plan cancelled; orders returned to pending", data: cancelledPlan });
   } catch (error) { next(error); }
 };
 
-module.exports = { previewPlan, createPlan, autoPoolOrders, getPlans, getLatestPlan, getPlanById, assignRider, cancelPlan };
+module.exports = { previewPlan, createPlan, autoPoolOrders, getPlans, getLatestPlan, getPlanById, assignRider, unassignRider, cancelPlan };

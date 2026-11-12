@@ -5,6 +5,7 @@ const Shop = require("../models/Shop");
 const Rider = require("../models/Rider");
 const Warehouse = require("../models/Warehouse");
 const Plan = require("../models/Plan");
+const { parsePagination } = require("../utils/pagination");
 const { checkWarehouseServiceability } = require("../services/warehouse-serviceability.service");
 
 const validStatuses = [
@@ -112,6 +113,7 @@ const createOrder = async (req, res, next) => {
       location: finalLocation,
       items: validatedItems,
       totalAmount,
+      statusHistory: [{ status: "pending", changedBy: req.user.id, actorRole: req.user.role, note: "Order created" }],
       ...(deliveryWindowMin !== undefined && { deliveryWindowMin }),
     });
     return res.status(201).json({ success: true, message: warehouse ? "Supply order placed successfully" : "Order created successfully", data: order });
@@ -186,6 +188,7 @@ const createManualOrderForShop = async (req, res, next) => {
       deliverySlotEnd: slotEnd,
       items: validatedItems,
       totalAmount,
+      statusHistory: [{ status: "pending", changedBy: req.user.id, actorRole: req.user.role, note: "Manual order recorded by wholesaler" }],
       ...(deliveryWindowMin !== undefined && { deliveryWindowMin }),
     });
     return res.status(201).json({ success: true, message: "Manual supply order recorded successfully", data: order });
@@ -226,17 +229,20 @@ const getOrders = async (req, res, next) => {
       filter.status = req.query.status;
     }
 
-    const orders = await Order.find(filter)
-      .populate("shop", "name address area owner location")
-      .populate("warehouse", "name address location owner supplierName")
-      .populate("rider", "name phone vehicleType")
-      .sort({ createdAt: -1 });
+    const pagination = parsePagination(req.query, { defaultLimit: 50, maxLimit: 100 });
+    if (pagination.error) return res.status(400).json({ success: false, message: pagination.error });
+    const [total, orders] = await Promise.all([
+      Order.countDocuments(filter),
+      Order.find(filter)
+        .populate("shop", "name address area owner location")
+        .populate("warehouse", "name address location owner supplierName")
+        .populate("rider", "name phone vehicleType")
+        .sort({ createdAt: -1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit),
+    ]);
 
-    return res.status(200).json({
-      success: true,
-      count: orders.length,
-      data: orders,
-    });
+    return res.status(200).json({ success: true, count: orders.length, total, page: pagination.page, limit: pagination.limit, pages: Math.ceil(total / pagination.limit), data: orders });
   } catch (error) {
     next(error);
   }
@@ -325,6 +331,7 @@ const updateOrderStatus = async (req, res, next) => {
         message: "Order not found",
       });
     }
+    const previousStatus = order.status;
 
     if (req.user.role === "shopkeeper") {
       const ownedShop = await Shop.findOne({
@@ -385,15 +392,25 @@ const updateOrderStatus = async (req, res, next) => {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
 
-    await order.save();
-    if (order.plan && status === "delivered") {
-      const plan = await Plan.findById(order.plan);
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: order._id, status: previousStatus },
+      {
+        $set: { status },
+        $push: { statusHistory: { status, changedBy: req.user.id, actorRole: req.user.role, note: `Status changed from ${previousStatus} to ${status}` } },
+      },
+      { new: true, runValidators: true }
+    );
+    if (!updatedOrder) {
+      return res.status(409).json({ success: false, message: "Order status changed concurrently. Refresh and retry." });
+    }
+
+    if (updatedOrder.plan && status === "delivered") {
+      const plan = await Plan.findById(updatedOrder.plan);
       if (plan) {
         const remaining = await Order.countDocuments({ plan: plan._id, status: { $ne: "delivered" } });
         if (remaining === 0) {
-          plan.status = "completed";
-          await plan.save();
-          if (plan.rider) await Rider.findByIdAndUpdate(plan.rider, { isAvailable: true });
+          await Plan.updateOne({ _id: plan._id, status: "planned" }, { $set: { status: "completed" } });
+          if (plan.rider) await Rider.findByIdAndUpdate(plan.rider, { $set: { isAvailable: true } });
         }
       }
     }
@@ -401,7 +418,7 @@ const updateOrderStatus = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       message: "Order status updated successfully",
-      data: order,
+      data: updatedOrder,
     });
   } catch (error) {
     next(error);

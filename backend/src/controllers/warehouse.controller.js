@@ -1,5 +1,8 @@
 const mongoose = require("mongoose");
 const Warehouse = require("../models/Warehouse");
+const Plan = require("../models/Plan");
+const Rider = require("../models/Rider");
+const { parsePagination } = require("../utils/pagination");
 
 const validLocation = (location) =>
   location &&
@@ -33,10 +36,21 @@ const createWarehouse = async (req, res, next) => {
 
 const getWarehouses = async (req, res, next) => {
   try {
-    const filter = req.user.role === "wholesaler" ? { owner: req.user.id } : { isActive: true };
+    let filter;
+    if (req.user.role === "wholesaler") filter = { owner: req.user.id };
+    else if (req.user.role === "rider") {
+      const rider = await Rider.findOne({ user: req.user.id }).select("_id");
+      const warehouseIds = rider ? await Plan.find({ rider: rider._id, status: { $in: ["planned", "completed"] } }).distinct("warehouse") : [];
+      filter = { _id: { $in: warehouseIds }, isActive: true };
+    } else filter = { isActive: true };
     if (req.query.area) filter.serviceAreas = { $in: [String(req.query.area).trim()] };
-    const warehouses = await Warehouse.find(filter).populate("owner", "name email").sort({ createdAt: -1 });
-    return res.status(200).json({ success: true, count: warehouses.length, data: warehouses });
+    const pagination = parsePagination(req.query, { defaultLimit: 50, maxLimit: 100 });
+    if (pagination.error) return res.status(400).json({ success: false, message: pagination.error });
+    const [total, warehouses] = await Promise.all([
+      Warehouse.countDocuments(filter),
+      Warehouse.find(filter).populate("owner", "name").sort({ createdAt: -1 }).skip(pagination.skip).limit(pagination.limit),
+    ]);
+    return res.status(200).json({ success: true, count: warehouses.length, total, page: pagination.page, limit: pagination.limit, pages: Math.ceil(total / pagination.limit), data: warehouses });
   } catch (error) { next(error); }
 };
 
@@ -46,8 +60,13 @@ const getWarehouseById = async (req, res, next) => {
     if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid warehouse ID" });
     const filter = { _id: id };
     if (req.user.role === "wholesaler") filter.owner = req.user.id;
-    else filter.isActive = true;
-    const warehouse = await Warehouse.findOne(filter).populate("owner", "name email");
+    else if (req.user.role === "rider") {
+      const rider = await Rider.findOne({ user: req.user.id }).select("_id");
+      const hasPlan = rider && await Plan.exists({ rider: rider._id, warehouse: id, status: { $in: ["planned", "completed"] } });
+      if (!hasPlan) return res.status(404).json({ success: false, message: "Warehouse not found" });
+      filter.isActive = true;
+    } else filter.isActive = true;
+    const warehouse = await Warehouse.findOne(filter).populate("owner", "name");
     if (!warehouse) return res.status(404).json({ success: false, message: "Warehouse not found" });
     return res.status(200).json({ success: true, data: warehouse });
   } catch (error) { next(error); }

@@ -136,12 +136,20 @@ const callMlEndpoint = async ({ baseUrl = process.env.ML_SERVICE_URL, path, meth
       throw Object.assign(new Error("Could not connect to ML service"), { code: "ML_NETWORK_ERROR", statusCode: 502 });
     }
     const raw = await response.text();
+    if (raw.length > 1_000_000) {
+      throw Object.assign(new Error("ML service response exceeded the allowed size"), { code: "ML_RESPONSE_TOO_LARGE", statusCode: 502 });
+    }
     let data = null;
     if (raw) {
-      try { data = JSON.parse(raw); } catch { data = { rawText: raw.slice(0, 2000) }; }
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        throw Object.assign(new Error("ML service returned an invalid JSON response"), { code: "ML_INVALID_RESPONSE", statusCode: 502 });
+      }
     }
     if (!response.ok) {
       const detail = typeof data?.detail === "string" ? data.detail : typeof data?.message === "string" ? data.message : `ML service returned HTTP ${response.status}`;
+      // Do not relay upstream exception content to API callers.
       throw Object.assign(new Error(detail.slice(0, 300)), { code: "ML_UPSTREAM_ERROR", statusCode: 502, upstreamStatus: response.status });
     }
     return { status: response.status, data };

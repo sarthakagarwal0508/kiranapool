@@ -1,14 +1,16 @@
 # KiranaPool Backend API Inventory — Phases 1–7
 
-Base URL: `http://localhost:5000/api`. Protected endpoints use `Authorization: Bearer <JWT>`.
+Base URL: `http://localhost:5000/api`. Protected endpoints support the browser HttpOnly cookie session (CSRF header required for writes) or `Authorization: Bearer <JWT>` for native/backwards-compatible clients.
 
 | # | Feature | Method | Endpoint | Access |
 |---:|---|---|---|---|
 | 1 | Health | GET | `/health` | Public |
-| 2 | Auth | POST | `/auth/signup` | Public; role `shopkeeper`, `wholesaler` or `rider` |
+| 2 | Auth | POST | `/auth/signup` | Public; shopkeeper open; wholesaler/rider require backend invite codes |
 | 3 | Auth | POST | `/auth/login` | Public |
 | 4 | Auth | POST | `/auth/google` | Public |
-| 5 | Auth | GET | `/auth/me` | JWT |
+| 5 | Auth | GET | `/auth/me` | Cookie or Bearer JWT |
+| 46 | Auth | GET | `/auth/csrf` | Public; sets CSRF cookie and returns CSRF value (not JWT) |
+| 47 | Auth | POST | `/auth/logout` | Authenticated; revokes sessions and clears cookies |
 | 6 | Shops | GET | `/shops` | JWT; role-filtered |
 | 7 | Shops | GET | `/shops/:id` | JWT; role/ownership scoped |
 | 8 | Shops | POST | `/shops` | Shopkeeper |
@@ -35,6 +37,7 @@ Base URL: `http://localhost:5000/api`. Protected endpoints use `Authorization: B
 | 29 | Plans | POST | `/plans` | Wholesaler |
 | 30 | Plans | PATCH | `/plans/:id/assign-rider` | Wholesaler owning plan |
 | 31 | Plans | POST | `/plans/:id/cancel` | Wholesaler owning plan |
+| 48 | Plans | DELETE | `/plans/:id/assign-rider` | Wholesaler owning plan; only before delivery starts |
 | 32 | Plans | GET | `/plans/:id` | Wholesaler/assigned rider |
 | 33 | Forecasts | GET | `/forecasts` | Wholesaler/shopkeeper; scoped |
 | 34 | Forecasts | POST | `/forecasts/run` | Wholesaler |
@@ -49,8 +52,10 @@ Base URL: `http://localhost:5000/api`. Protected endpoints use `Authorization: B
 | 43 | ML end-to-end planner | POST | `/ml/routes/plan` | Wholesaler JWT; forwards batching/routing/cost request |
 | 44 | ML travel-time | POST | `/ml/travel-time` | Wholesaler/rider JWT |
 | 45 | ML delivery economics | POST | `/ml/economics/costs` | Wholesaler JWT |
+| 49 | Analytics overview | GET | `/analytics/overview` | Authenticated app role; scoped metrics |
+| 50 | Map overview | GET | `/map/overview` | Authenticated app role; role-scoped map data |
 
-**Total: 45 endpoint paths** (43 feature routes plus 2 backward-compatible singular plan paths). Static plan routes (`/preview`, `/auto-pool`, `/latest`) are registered before `/:id`.
+Static plan routes (`/preview`, `/auto-pool`, `/latest`) are registered before `/:id`. New security and analytics routes are listed above.
 
 Notes:
 - New B2B replenishment orders include a `warehouse` plus future `deliverySlotStart`/`deliverySlotEnd`; legacy orders without a warehouse remain supported but do not participate in pooling or wholesaler dashboards.

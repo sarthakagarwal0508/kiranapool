@@ -14,6 +14,9 @@ test("health endpoint reports API and database state", async () => {
     assert.equal(body.success, connected);
     assert.equal(body.services.api, "running");
     assert.equal(body.services.database, connected ? "connected" : "disconnected");
+    assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(response.headers.get("x-frame-options"), "DENY");
+    assert.ok(response.headers.get("x-request-id"));
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

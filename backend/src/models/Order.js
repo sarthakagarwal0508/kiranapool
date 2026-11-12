@@ -74,6 +74,13 @@ const orderSchema = new mongoose.Schema(
       enum: ["pending", "planned", "picked", "delivered", "cancelled"],
       default: "pending",
     },
+    statusHistory: [{
+      status: { type: String, enum: ["pending", "planned", "picked", "delivered", "cancelled"], required: true },
+      changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+      actorRole: { type: String, enum: ["shopkeeper", "wholesaler", "rider", "system"], default: "system" },
+      changedAt: { type: Date, default: Date.now },
+      note: { type: String, trim: true, maxlength: 250, default: "" },
+    }],
     deliveryWindowMin: {
       type: Number,
       default: 60,

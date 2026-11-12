@@ -4,6 +4,7 @@ const {
   DEFAULT_MAX_DELIVERY_DISTANCE_KM,
   distanceKm,
   checkWarehouseServiceability,
+  normalizeArea,
 } = require("../src/services/warehouse-serviceability.service");
 
 const warehouse = {
@@ -57,4 +58,15 @@ test("warehouse without service-area restrictions can serve any shop (existing b
 test("distance helper returns zero for identical points and positive km for distinct points", () => {
   assert.equal(distanceKm({ lat: 26, lng: 75 }, { lat: 26, lng: 75 }), 0);
   assert.ok(distanceKm({ lat: 26, lng: 75 }, { lat: 26.01, lng: 75 }) > 1);
+});
+
+
+test("area normalization collapses real whitespace consistently", () => {
+  assert.equal(normalizeArea("  Mansarovar\t  Nagar  "), "mansarovar nagar");
+  const result = checkWarehouseServiceability({
+    warehouse: { serviceAreas: ["Mansarovar Nagar"], location: { lat: 26.785, lng: 75.85 } },
+    shop: { area: "Mansarovar   Nagar", location: { lat: 28.6, lng: 77.2 } },
+  });
+  assert.equal(result.allowed, true);
+  assert.equal(result.reason, "area-match");
 });

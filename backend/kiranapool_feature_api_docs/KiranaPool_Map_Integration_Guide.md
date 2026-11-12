@@ -6,9 +6,7 @@ The backend now exposes a role-aware map payload and records when a rider last s
 
 ## Authentication
 
-All endpoints below require the existing JWT:
-
-`Authorization: Bearer <accessToken>`
+All endpoints below require authentication. Browser clients should use the HttpOnly `kp_access` cookie with `credentials: "include"` and send the in-memory CSRF token in `X-CSRF-Token` on writes. Native/backwards-compatible clients may use `Authorization: Bearer <accessToken>`.
 
 ## 1. Get map data for the signed-in dashboard
 

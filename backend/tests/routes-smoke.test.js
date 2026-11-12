@@ -13,6 +13,8 @@ test("role and Phase 6 model contracts are registered", () => {
   assert.ok(Order.schema.path("deliverySlotStart"));
   assert.ok(Plan.schema.path("route"));
   assert.ok(Plan.schema.path("createdBy"));
+  assert.ok(Order.schema.path("statusHistory"));
+  assert.ok(require("../src/models/Rider").schema.path("managedBy"));
 });
 
 test("Phase 6/7 protected routes are mounted and reject missing JWTs", async () => {
@@ -35,6 +37,9 @@ test("Phase 6/7 protected routes are mounted and reject missing JWTs", async () 
       ["/ml/batch", "POST"],
       ["/ml/travel-time", "POST"],
       ["/ml/economics/costs", "POST"],
+      ["/analytics/overview", "GET"],
+      ["/plans/000000000000000000000000/assign-rider", "DELETE"],
+      ["/auth/logout", "POST"],
       ["/orders", "GET"],
       ["/orders/manual", "POST"],
     ]) {

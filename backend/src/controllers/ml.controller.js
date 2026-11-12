@@ -16,11 +16,15 @@ const proxyEndpoint = ({ path, method = "POST", timeoutMs, validate }) => async 
   } catch (error) {
     let status = [400, 503, 504].includes(error.statusCode) ? error.statusCode : 502;
     if (error.upstreamStatus === 422 || error.upstreamStatus === 400) status = 400;
+    const safeMessage = status === 503
+      ? "ML service is not configured or unavailable"
+      : status === 504
+        ? "ML service timed out"
+        : "ML operation could not be completed";
     return res.status(status).json({
       success: false,
-      message: error.message || "ML service request failed",
+      message: safeMessage,
       code: error.code || "ML_SERVICE_ERROR",
-      ...(error.upstreamStatus ? { upstreamStatus: error.upstreamStatus } : {}),
     });
   }
 };

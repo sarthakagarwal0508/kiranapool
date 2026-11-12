@@ -2,20 +2,20 @@
 const mongoose = require("mongoose");
 const Rider = require("../models/Rider");
 const Plan = require("../models/Plan");
+const { parsePagination } = require("../utils/pagination");
 
 // GET /api/riders
 // List all riders (authenticated users only)
 const getRiders = async (req, res, next) => {
   try {
-    const riders = await Rider.find()
-      .select("-__v")
-      .sort({ createdAt: -1 });
-
-    return res.status(200).json({
-      success: true,
-      count: riders.length,
-      data: riders,
-    });
+    const filter = { $or: [{ managedBy: req.user.id }, { managedBy: null, isAvailable: true }] };
+    const pagination = parsePagination(req.query, { defaultLimit: 50, maxLimit: 100 });
+    if (pagination.error) return res.status(400).json({ success: false, message: pagination.error });
+    const [total, riders] = await Promise.all([
+      Rider.countDocuments(filter),
+      Rider.find(filter).select("name phone vehicleType location isAvailable locationUpdatedAt").sort({ isAvailable: -1, createdAt: -1 }).skip(pagination.skip).limit(pagination.limit),
+    ]);
+    return res.status(200).json({ success: true, count: riders.length, total, page: pagination.page, limit: pagination.limit, pages: Math.ceil(total / pagination.limit), data: riders });
   } catch (error) {
     next(error);
   }
@@ -25,7 +25,7 @@ const getRiders = async (req, res, next) => {
 // Get the logged-in rider's profile
 const getMyRiderProfile = async (req, res, next) => {
   try {
-    const rider = await Rider.findOne({ user: req.user.id }).select("-__v");
+    const rider = await Rider.findOne({ user: req.user.id }).select("-__v -managedBy");
 
     if (!rider) {
       return res.status(404).json({
@@ -56,7 +56,7 @@ const getRiderById = async (req, res, next) => {
       });
     }
 
-    const rider = await Rider.findById(id).select("-__v");
+    const rider = await Rider.findOne({ _id: id, $or: [{ managedBy: req.user.id }, { managedBy: null, isAvailable: true }] }).select("name phone vehicleType location isAvailable locationUpdatedAt");
 
     if (!rider) {
       return res.status(404).json({
@@ -80,11 +80,14 @@ const createRiderProfile = async (req, res, next) => {
   try {
     const { name, phone, vehicleType, location } = req.body;
 
-    if (!name || !name.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Rider name is required",
-      });
+    if (typeof name !== "string" || !name.trim() || name.trim().length > 100) {
+      return res.status(400).json({ success: false, message: "Rider name must be a non-empty string up to 100 characters" });
+    }
+    if (phone !== undefined && (typeof phone !== "string" || phone.length > 30)) {
+      return res.status(400).json({ success: false, message: "Phone must be a string up to 30 characters" });
+    }
+    if (vehicleType !== undefined && !["bike", "scooter", "cycle", "other"].includes(vehicleType)) {
+      return res.status(400).json({ success: false, message: "Invalid vehicleType" });
     }
 
     if (
@@ -251,7 +254,7 @@ const updateMyRiderProfile = async (req, res, next) => {
       { user: req.user.id },
       { $set: updates },
       { new: true, runValidators: true }
-    ).select("-__v");
+    ).select("-__v -managedBy");
 
     if (!rider) {
       return res.status(404).json({

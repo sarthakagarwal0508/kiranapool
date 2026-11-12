@@ -10,6 +10,9 @@ const riderSchema = new mongoose.Schema(
       unique: true,
       index: true,
     },
+    // A rider is linked to the first wholesaler who assigns them. This prevents
+    // unrelated wholesalers from viewing/assigning the same rider account.
+    managedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true },
     name: {
       type: String,
       required: [true, "Rider name is required"],

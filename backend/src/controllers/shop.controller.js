@@ -1,6 +1,9 @@
 const mongoose = require("mongoose");
 const Shop = require("../models/Shop");
 const Warehouse = require("../models/Warehouse");
+const Order = require("../models/Order");
+const Rider = require("../models/Rider");
+const { parsePagination } = require("../utils/pagination");
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -30,17 +33,21 @@ const getShops = async (req, res, next) => {
       filter = { owner: req.user.id };
     } else if (req.user.role === "wholesaler") {
       filter = await wholesalerShopFilter(req.user.id);
+    } else if (req.user.role === "rider") {
+      const rider = await Rider.findOne({ user: req.user.id }).select("_id");
+      const shopIds = rider ? await Order.find({ rider: rider._id, status: { $in: ["planned", "picked"] } }).distinct("shop") : [];
+      filter = { _id: { $in: shopIds }, isActive: true };
     } else {
-      filter = { isActive: true };
+      return res.status(403).json({ success: false, message: "Access denied" });
     }
 
-    const shops = await Shop.find(filter).sort({ createdAt: -1 });
-
-    return res.status(200).json({
-      success: true,
-      count: shops.length,
-      data: shops,
-    });
+    const pagination = parsePagination(req.query, { defaultLimit: 50, maxLimit: 100 });
+    if (pagination.error) return res.status(400).json({ success: false, message: pagination.error });
+    const [total, shops] = await Promise.all([
+      Shop.countDocuments(filter),
+      Shop.find(filter).sort({ createdAt: -1 }).skip(pagination.skip).limit(pagination.limit),
+    ]);
+    return res.status(200).json({ success: true, count: shops.length, total, page: pagination.page, limit: pagination.limit, pages: Math.ceil(total / pagination.limit), data: shops });
   } catch (error) {
     next(error);
   }
@@ -63,8 +70,13 @@ const getShopById = async (req, res, next) => {
       filter.owner = req.user.id;
     } else if (req.user.role === "wholesaler") {
       filter = { _id: id, ...(await wholesalerShopFilter(req.user.id)) };
-    } else {
+    } else if (req.user.role === "rider") {
+      const rider = await Rider.findOne({ user: req.user.id }).select("_id");
+      const hasAssignedOrder = rider && await Order.exists({ shop: id, rider: rider._id, status: { $in: ["planned", "picked"] } });
+      if (!hasAssignedOrder) return res.status(404).json({ success: false, message: "Shop not found" });
       filter.isActive = true;
+    } else {
+      return res.status(403).json({ success: false, message: "Access denied" });
     }
 
     const shop = await Shop.findOne(filter);
@@ -260,23 +272,19 @@ const deleteShop = async (req, res, next) => {
       });
     }
 
-    const shop = await Shop.findOneAndDelete({
-      _id: id,
-      owner: req.user.id,
-    });
-
+    const shop = await Shop.findOne({ _id: id, owner: req.user.id });
     if (!shop) {
-      return res.status(404).json({
-        success: false,
-        message: "Shop not found or you do not own this shop",
-      });
+      return res.status(404).json({ success: false, message: "Shop not found or you do not own this shop" });
     }
 
-    return res.status(200).json({
-      success: true,
-      message: "Shop deleted successfully",
-      data: shop,
-    });
+    const activeOrders = await Order.countDocuments({ shop: shop._id, status: { $in: ["pending", "planned", "picked"] } });
+    if (activeOrders > 0) {
+      return res.status(409).json({ success: false, message: "This shop has active orders. Complete or cancel them before deactivating the shop.", activeOrders });
+    }
+
+    shop.isActive = false;
+    await shop.save();
+    return res.status(200).json({ success: true, message: "Shop deactivated. Historical orders have been preserved.", data: shop });
   } catch (error) {
     next(error);
   }

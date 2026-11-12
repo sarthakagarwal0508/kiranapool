@@ -2,7 +2,7 @@
 
 Base URL: `http://localhost:5000/api`
 
-Roles: `shopkeeper` (kirana retailer), `wholesaler` (supplier/warehouse owner), `rider` (delivery rider). All protected routes require `Authorization: Bearer <JWT_TOKEN>`.
+Roles: `shopkeeper` (kirana retailer), `wholesaler` (supplier/warehouse owner), `rider` (delivery rider). Protected routes support the browser `HttpOnly` JWT cookie session (with CSRF header for writes) or `Authorization: Bearer <JWT_TOKEN>` for native/backwards-compatible clients.
 
 ## Docs
 - `01-health-api.md` — health check
@@ -18,4 +18,4 @@ Roles: `shopkeeper` (kirana retailer), `wholesaler` (supplier/warehouse owner), 
 ## Status
 Phase 1–5 endpoints are retained, with backward-compatible legacy order support. Phase 6 adds wholesaler-owned warehouses, compatibility-based pooling, route estimates, plan creation and rider assignment. Phase 7 adds shop/area and time-slot forecasts, cost/savings metrics, a demo data seed, FastAPI forecasting and route/batch/economics integration with validation-safe local fallback.
 
-Run `npm test` for the included pure-service tests. Run `npm run seed:demo` only against a demo database to create reproducible sample data. Demo logins and password are documented in `PHASE6_7_API_GUIDE.md`.
+Run `npm test` for the included pure-service tests. Run `npm run seed:demo` only against a demo database to create reproducible sample data. Demo account emails are documented in `PHASE6_7_API_GUIDE.md`; the local `DEMO_SEED_PASSWORD` environment variable supplies the password.

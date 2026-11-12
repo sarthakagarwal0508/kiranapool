@@ -1,7 +1,7 @@
 # KiranaPool — Phase 6 & 7 Backend API Guide
 
 Base URL: `http://localhost:5000/api`  
-Authentication: `Authorization: Bearer <JWT>` unless noted.  
+Authentication: browser sessions use the HttpOnly cookie plus CSRF header for writes; native/backwards-compatible clients may use `Authorization: Bearer <JWT>`.  
 Roles: `shopkeeper` = kirana retailer, `wholesaler` = supplier/warehouse owner, `rider` = delivery rider.
 
 ## Recommended end-to-end workflow
@@ -11,7 +11,7 @@ Roles: `shopkeeper` = kirana retailer, `wholesaler` = supplier/warehouse owner, 
 3. Sign up/login as `shopkeeper`, create a kirana shop with `POST /shops`.
 4. As the wholesaler, call `GET /shops` to select an active kirana in the service areas, then record an offline order with `POST /orders/manual`; alternatively, the shopkeeper can place a supply order via `POST /orders` with a warehouse and future slot.
 5. As the wholesaler, use `POST /plans/preview`, then `POST /plans` to create a selected plan, or `POST /plans/auto-pool` to batch all compatible pending orders.
-6. Assign a rider with `PATCH /plans/:id/assign-rider`.
+6. Assign a rider with `PATCH /plans/:id/assign-rider`. Before delivery starts, a wholesaler can release the rider with `DELETE /plans/:id/assign-rider`.
 7. The rider gets assigned orders from `GET /orders` and updates each order with `PATCH /orders/:id/status` (`planned` → `picked` → `delivered`). A plan completes when all its orders are delivered.
 8. Generate forecasts using `POST /forecasts/run`; the Node backend calls FastAPI if configured, otherwise it runs its local fallback forecast.
 
@@ -119,9 +119,19 @@ Wholesalers can see plans for their warehouses. Riders can see plans assigned to
 
 `riderId` is the MongoDB `_id` from `GET /riders`, not the user ID. Rider must be available and not already assigned an active plan. Assignment links the rider to the plan and all orders in it.
 
+### `DELETE /plans/:id/assign-rider` — wholesaler only
+
+Unassigns the current rider before delivery starts. The plan and orders remain `planned`, and the rider becomes available for another plan.
+
 ### `POST /plans/:id/cancel` — wholesaler only
 
 Cancels a planned delivery only if delivery has not begun; orders return to `pending` and rider assignment is cleared.
+
+## Dashboard analytics
+
+### `GET /analytics/overview`
+
+Returns role-scoped order counts/value/status totals and completion rate. Wholesalers also receive active plan, available rider, pooled cost and estimated savings totals; shopkeepers receive shop count; riders receive assigned-plan and their own current availability/location metadata. Optional `from` and `to` filters use order creation dates; date-only `to` values are inclusive through the end of that day.
 
 ## Forecasting / Phase 7
 
@@ -151,19 +161,15 @@ Records the actual demand against one of the wholesaler's forecast rows for late
 
 ## Demo data
 
-Run from `backend/`:
+Run from `backend/` against a dedicated demo database only. Explicitly set `ALLOW_DEMO_SEED=true` and `DEMO_SEED_PASSWORD` (unique, at least 16 characters) before running `npm run seed:demo`. The script is disabled by default, refuses production unless separately overridden, and never prints the password.
 
-```bash
-npm run seed:demo
-```
-
-Demo accounts use the password `KiranaDemo@123`:
+Seeded accounts use the configured `DEMO_SEED_PASSWORD`:
 
 - `demo.wholesaler@kiranapool.test`
 - `demo.shopkeeper1@kiranapool.test` through `demo.shopkeeper4@kiranapool.test`
 - `demo.rider@kiranapool.test`
 
-The seed script creates 2 warehouses, 4 kirana shops, one rider, 4 weeks of synthetic historical supply orders and future pending orders with compatible delivery slots. It refreshes only orders marked `demoSeed: true` and plans/forecasts for the demo wholesaler; do not use these credentials outside a local/demo environment.
+The seed script creates 2 warehouses, 4 kirana shops, one rider, 4 weeks of synthetic historical supply orders and future pending orders with compatible delivery slots. It refreshes only orders marked `demoSeed: true` and plans/forecasts for the demo wholesaler. Never run it against production.
 
 
 ### ML planning proxy endpoints

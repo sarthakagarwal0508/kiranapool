@@ -89,7 +89,7 @@ npm test
 npm start
 ```
 
-Test the Node health endpoint at `GET /api/health`. For ML proxy endpoints, send a valid Node backend JWT in `Authorization: Bearer <token>` and use the role listed in the endpoint table.
+Test the Node health endpoint at `GET /api/health`. For ML proxy endpoints, browser clients use the HttpOnly session cookie with credentials enabled; native/backwards-compatible clients may send a valid Node backend JWT in `Authorization: Bearer <token>`. Use the role listed in the endpoint table.
 
 ## Illustrative request bodies from the schema draft
 

@@ -1,0 +1,283 @@
+{
+  "info": {
+    "_postman_id": "4f9f3dd6-3f07-4c9c-8a27-a1d9c4b02ca1",
+    "name": "KiranaPool Backend \u2014 Secured API",
+    "description": "HttpOnly JWT cookie sessions; keep the Postman cookie jar enabled. Run CSRF bootstrap once before write requests. Change baseUrl and test IDs for your environment. Do not paste JWTs into variables.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api",
+      "type": "string"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const method = pm.request.method.toUpperCase();",
+          "if (![\"GET\", \"HEAD\", \"OPTIONS\"].includes(method)) {",
+          "  const csrf = pm.cookies.get(\"kp_csrf\");",
+          "  if (csrf) pm.request.headers.upsert({ key: \"X-CSRF-Token\", value: csrf });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Bootstrap CSRF token",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/auth/csrf",
+        "description": "Run before write requests if the cookie jar has no kp_csrf cookie. The response returns the CSRF value, not a JWT."
+      }
+    },
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/health"
+      }
+    },
+    {
+      "name": "Sign up shopkeeper",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/signup",
+        "description": "Browser sessions are set as HttpOnly cookies. No JWT is returned in JSON.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Aman Sharma\",\n  \"email\": \"aman@example.com\",\n  \"password\": \"ChangeMe123!\",\n  \"role\": \"shopkeeper\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "description": "Cookies are stored by Postman. The collection pre-request script sends the kp_csrf cookie on write requests.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"aman@example.com\",\n  \"password\": \"ChangeMe123!\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Current user",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/auth/me"
+      }
+    },
+    {
+      "name": "Logout",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/logout",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Dashboard analytics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/analytics/overview"
+      }
+    },
+    {
+      "name": "List warehouses",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/warehouses?page=1&limit=50"
+      }
+    },
+    {
+      "name": "List shops",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/shops?page=1&limit=50"
+      }
+    },
+    {
+      "name": "List orders",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/orders?page=1&limit=50&status=pending"
+      }
+    },
+    {
+      "name": "Create supply order",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/orders",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"shop\": \"<SHOP_OBJECT_ID>\",\n  \"warehouse\": \"<WAREHOUSE_OBJECT_ID>\",\n  \"deliverySlotStart\": \"2030-01-01T10:00:00+05:30\",\n  \"deliverySlotEnd\": \"2030-01-01T12:00:00+05:30\",\n  \"items\": [\n    {\n      \"name\": \"Rice 1kg\",\n      \"quantity\": 2,\n      \"price\": 60\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Preview delivery plan",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/plans/preview",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"warehouseId\": \"<WAREHOUSE_OBJECT_ID>\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Create delivery plan",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/plans",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"warehouseId\": \"<WAREHOUSE_OBJECT_ID>\",\n  \"orderIds\": [\n    \"<ORDER_OBJECT_ID>\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "List delivery plans",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/plans?page=1&limit=50"
+      }
+    },
+    {
+      "name": "Assign rider",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/plans/<PLAN_OBJECT_ID>/assign-rider",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"riderId\": \"<RIDER_OBJECT_ID>\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Unassign rider before route starts",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "{{baseUrl}}/plans/<PLAN_OBJECT_ID>/assign-rider"
+      }
+    },
+    {
+      "name": "Run forecasts",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/forecasts/run",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"horizonDays\": 7,\n  \"groupBy\": \"both\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

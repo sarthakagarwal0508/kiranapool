@@ -12,8 +12,23 @@ const Forecast = require("../models/Forecast");
 const { startOfIstDay } = require("../services/ml.service");
 const { calculateRoute } = require("../services/planning.service");
 
-// DEMO ONLY: repeatable seed accounts and synthetic Jaipur data. Do not use these credentials in production.
-const demoPassword = "KiranaDemo@123";
+// DEMO ONLY: this destructive seed script is disabled unless explicitly enabled.
+const demoPassword = process.env.DEMO_SEED_PASSWORD;
+
+function assertDemoSeedAllowed() {
+  if (process.env.ALLOW_DEMO_SEED !== "true") {
+    throw new Error("Demo seeding is disabled. Set ALLOW_DEMO_SEED=true only for a dedicated demo database.");
+  }
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_SEED_IN_PRODUCTION !== "true") {
+    throw new Error("Demo seeding is blocked in production unless ALLOW_DEMO_SEED_IN_PRODUCTION=true is explicitly set.");
+  }
+  if (typeof demoPassword !== "string" || demoPassword.length < 16) {
+    throw new Error("DEMO_SEED_PASSWORD must be set to a unique password of at least 16 characters.");
+  }
+  if (!String(process.env.MONGODB_URI || "").trim()) {
+    throw new Error("MONGODB_URI is required.");
+  }
+}
 const shopsData = [
   ["mansarovar", "Mansarovar", "Amit Sharma", 26.8540, 75.7640],
   ["malviya", "Malviya Nagar", "Riya Verma", 26.8545, 75.8050],
@@ -56,8 +71,9 @@ function orderDoc({ shop, warehouse, wholesaler, status, slotStart, slotEnd, ite
 }
 
 async function main() {
+  assertDemoSeedAllowed();
   await connectDB();
-  const passwordHash = await bcrypt.hash(demoPassword, 10);
+  const passwordHash = await bcrypt.hash(demoPassword, 12);
   const wholesaler = await upsertUser({ name: "Demo Jaipur Wholesaler", email: "demo.wholesaler@kiranapool.test", role: "wholesaler", passwordHash });
 
   const shops = [];
@@ -165,11 +181,10 @@ async function main() {
   await Forecast.insertMany(forecastDocs);
 
   console.log("\nKiranaPool demo seed complete (synthetic Jaipur demo data).\n");
-  console.log(`Wholesaler: demo.wholesaler@kiranapool.test / ${demoPassword}`);
-  console.log(`Shopkeepers (${shops.length}):`);
-  shops.forEach((s) => console.log(`  ${s.email} / ${demoPassword} — ${s.name}`));
-  console.log(`Riders (${riders.length}):`);
-  riders.forEach((r) => console.log(`  ${r.email} / ${demoPassword} — ${r.name}`));
+  console.log("Demo accounts use the DEMO_SEED_PASSWORD environment variable; the password is never printed.");
+  console.log("Wholesaler: demo.wholesaler@kiranapool.test");
+  console.log(`Shopkeepers (${shops.length}): ${shops.map((s) => s.email).join(", ")}`);
+  console.log(`Riders (${riders.length}): ${riders.map((r) => r.email).join(", ")}`);
   console.log(`Warehouses: 2 | Shops: ${shops.length} | Riders: ${riders.length}`);
   console.log(`Orders: ${historicalOrders.length} historical delivered + ${pendingDocs.length} pending + ${activeDocs.length} planned + 1 picked`);
   console.log(`Forecast rows: ${forecastDocs.length} (7 days; shop and area scopes; demo-seed source)`);

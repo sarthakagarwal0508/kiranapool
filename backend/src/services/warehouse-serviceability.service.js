@@ -8,7 +8,7 @@ function configuredMaxDistanceKm() {
 }
 
 function normalizeArea(value) {
-  return String(value || "").trim().toLowerCase().replace(/\\s+/g, " ");
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function validCoordinates(location) {

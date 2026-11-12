@@ -67,7 +67,7 @@ const generateForecasts = async (req, res, next) => {
         if (!forecasts.length) throw new Error("ML service returned no valid forecast rows");
       } catch (error) {
         if (process.env.ML_FALLBACK_ENABLED === "false") throw error;
-        integrationWarning = `ML service unavailable or invalid response; local fallback used (${error.message})`;
+        integrationWarning = "ML service unavailable or returned an invalid forecast; local fallback used";
       }
     }
     if (!forecasts) {

@@ -175,7 +175,7 @@ const calculateRouteWithMl = async (warehouse, orders, config = getPlanningConfi
     if (!fallbackEnabled()) throw Object.assign(error, { statusCode: error.statusCode || 502 });
     integration.fallbackUsed = true;
     integration.routeSolver.status = "local-fallback-error";
-    integration.warnings.push(`ML route solver unavailable or invalid; local route used (${error.message})`);
+    integration.warnings.push("ML route solver unavailable or invalid; local route used");
   }
 
   try {
@@ -237,7 +237,7 @@ const calculateRouteWithMl = async (warehouse, orders, config = getPlanningConfi
     if (!fallbackEnabled()) throw Object.assign(error, { statusCode: error.statusCode || 502 });
     integration.fallbackUsed = true;
     integration.economics.status = "local-fallback-error";
-    integration.warnings.push(`ML economics unavailable or invalid; local economics kept (${error.message})`);
+    integration.warnings.push("ML economics unavailable or invalid; local economics kept");
   }
 
   return { ...result, mlIntegration: integration };
@@ -302,7 +302,7 @@ const batchOrdersWithMl = async (orders, config = getPlanningConfig(), client = 
   } catch (error) {
     if (!fallbackEnabled()) throw Object.assign(error, { statusCode: error.statusCode || 502 });
     status.status = "local-fallback-error";
-    status.warning = `ML batching unavailable or response did not match schema; local grouping used (${error.message})`;
+    status.warning = "ML batching unavailable or response did not match schema; local grouping used";
     return { groups: localGroups, integration: status };
   }
 };

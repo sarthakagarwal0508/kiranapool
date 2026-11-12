@@ -67,3 +67,17 @@ test("generic ML client reports a response timeout without exposing request deta
     global.fetch = originalFetch;
   }
 });
+
+test("generic ML client rejects invalid JSON without returning upstream raw text", async () => {
+  const { callMlEndpoint } = require("../src/services/ml.service");
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({ ok: true, status: 200, text: async () => "<html>internal upstream stack trace</html>" });
+  try {
+    await assert.rejects(
+      () => callMlEndpoint({ baseUrl: "https://ml.example.test", path: "/health", method: "GET", timeoutMs: 1000 }),
+      (error) => error.code === "ML_INVALID_RESPONSE" && !error.message.includes("internal upstream"),
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
